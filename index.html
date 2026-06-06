@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Agenda de Escala</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --primary: #3b82f6;
+            
+            /* Cores da Escala */
+            --cor-dia: #0ea5e9;
+            --cor-noite: #1e3a8a;
+            --cor-folga: #10b981;
+            --cor-especial: #ef4444; /* Vermelho */
+            
+            /* Cores de Prioridade (1 a 5) */
+            --prio-1: #10b981; /* Verde */
+            --prio-2: #f59e0b; /* Laranja */
+            --prio-3: #8b5cf6; /* Roxo */
+            --prio-4: #d946ef; /* Transição Rosa/Roxo */
+            --prio-5: #ef4444; /* Vermelho */
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        
+        body, html { height: 100vh; background-color: var(--bg-color); color: var(--text-main); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+        
+        #app { max-width: 480px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; position: relative; }
+
+        /* Header */
+        header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; border-bottom: 1px solid var(--border-color); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .month-selector { display: flex; align-items: center; gap: 12px; }
+        .month-selector button { background: none; border: none; font-size: 20px; color: var(--primary); padding: 5px; cursor: pointer; }
+        .month-selector h2 { font-size: 16px; text-transform: capitalize; }
+        .header-actions { display: flex; gap: 12px; align-items: center; }
+        .btn-icon { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+
+        /* Container Principal */
+        .main-content { flex-grow: 1; overflow-y: auto; padding-bottom: 80px; display: flex; flex-direction: column; }
+
+        /* Cabeçalho de Dias da Semana (Modo Grade) */
+        .week-days-header { display: none; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 11px; font-weight: bold; color: var(--text-muted); padding: 8px 4px 4px 4px; background: var(--bg-color); }
+
+        /* Lista de Dias (Modo Padrão) */
+        .days-container { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        
+        .day-card { background: var(--card-bg); border-radius: 12px; padding: 14px; border: 1px solid var(--border-color); box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .day-card.next-month { opacity: 0.6; background: #f1f5f9; border-color: #cbd5e1; }
+        .day-card.next-month .day-number { color: #94a3b8; }
+        
+        .day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .day-info { display: flex; align-items: baseline; gap: 8px; }
+        .day-number { font-size: 22px; font-weight: bold; }
+        .day-name { font-size: 14px; color: var(--text-muted); text-transform: capitalize; }
+        
+        /* Badges de Turno */
+        .shift-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; text-align: center; }
+        .shift-dia { background-color: var(--cor-dia); }
+        .shift-noite { background-color: var(--cor-noite); }
+        .shift-folga { background-color: var(--cor-folga); color: white; }
+
+        /* Especiais e Eventos */
+        .special-alert { background: #fee2e2; color: var(--cor-especial); border-left: 4px solid var(--cor-especial); padding: 8px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-bottom: 8px; line-height: 1.4; }
+        .emendando-tag { display: inline-block; background: var(--cor-especial); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; vertical-align: middle; }
+
+        .event-list { display: flex; flex-direction: column; gap: 6px; }
+        .event-item { background: #f8fafc; border: 1px solid var(--border-color); padding: 8px; border-radius: 6px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .fire-icons { display: flex; gap: 2px; }
+        .fire-icons svg { width: 14px; height: 14px; }
+        .event-details { display: flex; flex-direction: column; }
+        .event-title { font-weight: 600; }
+        .event-obs { font-size: 12px; color: var(--text-muted); }
+
+        /* Pontos de Notificação (Modo Grade) */
+        .grid-dots { display: none; gap: 3px; margin-top: auto; flex-wrap: wrap; justify-content: center; width: 100%; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; }
+        .dot-special { background: var(--cor-especial); }
+
+        /* =========================================
+           MODO GRADE (QUADRADINHOS)
+           ========================================= */
+        .main-content.mode-grid { overflow: hidden; padding-bottom: 0; }
+        .mode-grid .week-days-header { display: grid; }
+        .mode-grid .days-container { 
+            padding: 4px; 
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            grid-template-rows: repeat(6, 1fr); 
+            gap: 4px; 
+            height: calc(100vh - 100px); /* Preenche a tela toda sem rolar */
+        }
+        .mode-grid .day-card { 
+            padding: 4px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: flex-start; 
+            border-radius: 6px; 
+            margin: 0;
+        }
+        .mode-grid .day-card.empty { background: transparent; border: none; box-shadow: none; }
+        .mode-grid .day-header { margin-bottom: 2px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .mode-grid .day-info { gap: 0; }
+        .mode-grid .day-name { display: none; }
+        .mode-grid .day-number { font-size: 16px; }
+        .mode-grid .shift-badge { width: 12px; height: 12px; padding: 0; font-size: 0; border-radius: 50%; }
+        .mode-grid .special-alert, .mode-grid .event-list { display: none; }
+        .mode-grid .grid-dots { display: flex; }
+
+        /* Floating Action Button (FAB) */
+        .fab { position: fixed; bottom: 20px; right: 20px; width: 56px; height: 56px; background: var(--primary); color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 28px; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); border: none; cursor: pointer; z-index: 20; }
+
+        /* Modals */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: flex-end; z-index: 30; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 24px; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { font-size: 18px; }
+        .btn-close { background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer; }
+        
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 14px; color: var(--text-muted); margin-bottom: 6px; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; background: var(--bg-color); }
+        .form-control:focus { outline: none; border-color: var(--primary); }
+        
+        .type-selector { display: flex; gap: 10px; margin-bottom: 20px; }
+        .type-btn { flex: 1; padding: 10px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 8px; font-size: 14px; cursor: pointer; }
+        .type-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-submit { width: 100%; background: var(--primary); color: white; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <div class="month-selector">
+            <button onclick="changeMonth(-1)">&#10094;</button>
+            <h2 id="currentMonthYear">Maio 2026</h2>
+            <button onclick="changeMonth(1)">&#10095;</button>
+        </div>
+        <div class="header-actions">
+            <button class="btn-icon" onclick="toggleViewMode()" id="btnViewToggle" title="Mudar Visualização">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            </button>
+            <button class="btn-icon" onclick="openConfigModal()">&#9881;</button>
+        </div>
+    </header>
+
+    <div class="main-content" id="mainContent">
+        <div class="week-days-header">
+            <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+        </div>
+        <div class="days-container" id="calendar">
+            </div>
+    </div>
+
+    <button class="fab" onclick="openAddModal()">+</button>
+</div>
+
+<div class="modal-overlay" id="configModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Configurar Escala</h3>
+            <button class="btn-close" onclick="closeModals()">&times;</button>
+        </div>
+        <div class="form-group">
+            <label>Data de um Plantão de DIA (06h - 18h) base</label>
+            <input type="date" id="anchorDate" class="form-control">
+            <small style="display:block; margin-top:5px; color:#64748b; font-size:12px;">Esta data será usada para calcular todo o ciclo automático.</small>
+        </div>
+        <button class="btn-submit" onclick="saveConfig()">Salvar Escala</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="addModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Adicionar Registro</h3>
+            <button class="btn-close" onclick="closeModals()">&times;</button>
+        </div>
+        
+        <div class="type-selector">
+            <button class="type-btn active" id="btnTypeSpecial" onclick="switchFormType('special')">Especial</button>
+            <button class="type-btn" id="btnTypeEvent" onclick="switchFormType('event')">Evento Pessoal</button>
+        </div>
+
+        <div class="form-group">
+            <label>Data</label>
+            <input type="date" id="inputDate" class="form-control" onchange="checkEmendandoAutoFill()">
+            <small id="emendandoAviso" style="display:none; color:var(--cor-especial); font-weight:bold; margin-top:4px;">Dia de Plantão! Horário ajustado para Emendar.</small>
+        </div>
+
+        <div id="formSpecial">
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Hora Início</label>
+                    <input type="time" id="specialStart" class="form-control" value="16:00">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Hora Fim</label>
+                    <input type="time" id="specialEnd" class="form-control" value="04:00">
+                </div>
+            </div>
+        </div>
+
+        <div id="formEvent" class="hidden">
+            <div class="form-group">
+                <label>Nome do Evento</label>
+                <input type="text" id="eventName" class="form-control" placeholder="Ex: Médico, Aniversário">
+            </div>
+            <div class="form-group">
+                <label>Prioridade (1 = Baixa, 5 = Alta)</label>
+                <select id="eventPriority" class="form-control">
+                    <option value="1">1 - Verde</option>
+                    <option value="2">2 - Laranja</option>
+                    <option value="3">3 - Roxo</option>
+                    <option value="4">4 - Rosa Escuro</option>
+                    <option value="5">5 - Vermelho (Máxima)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Observação</label>
+                <input type="text" id="eventObs" class="form-control" placeholder="Detalhes adicionais...">
+            </div>
+        </div>
+
+        <button class="btn-submit" onclick="saveRecord()">Salvar</button>
+    </div>
+</div>
+
+<script>
+    const fireSVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 11c0 2.5-2.5 4-2.5 4s1-1.5 1-3c0-2-1.5-3-1.5-3s-.5 1-.5 2c0 0-1-1-1.5-2.5C11 7 12 4 12 4s-3 2-4 5c-1 3 1 5 1 5s-1.5-1.5-1.5-3C7 13.5 5 16 5 18c0 3.5 3 6 7 6s7-2.5 7-6c0-2.5-1.5-7-1.5-7z"/></svg>`;
+    
+    const colorsMap = {
+        1: 'var(--prio-1)', 2: 'var(--prio-2)', 3: 'var(--prio-3)', 4: 'var(--prio-4)', 5: 'var(--prio-5)'
+    };
+
+    const cycleDefinitions = [
+        { label: 'Plantão Dia (06h - 18h)', class: 'shift-dia', type: 'dia' },
+        { label: 'Plantão Noite (18h - 06h)', class: 'shift-noite', type: 'noite' },
+        { label: 'Folga', class: 'shift-folga', type: 'folga' },
+        { label: 'Folga', class: 'shift-folga', type: 'folga' },
+        { label: 'Folga', class: 'shift-folga', type: 'folga' }
+    ];
+
+    let currentDate = new Date();
+    let currentFormType = 'special';
+    let viewMode = localStorage.getItem('agendaGCM_viewMode') || 'list';
+
+    let appData = JSON.parse(localStorage.getItem('agendaGCM_data')) || { specials: {}, events: {} };
+    let anchorDateStr = localStorage.getItem('agendaGCM_anchor') || "";
+
+    function init() {
+        if (!anchorDateStr) openConfigModal();
+        applyViewMode();
+        renderCalendar();
+    }
+
+    function toggleViewMode() {
+        viewMode = viewMode === 'list' ? 'grid' : 'list';
+        localStorage.setItem('agendaGCM_viewMode', viewMode);
+        applyViewMode();
+        renderCalendar();
+    }
+
+    function applyViewMode() {
+        const main = document.getElementById('mainContent');
+        const iconBtn = document.getElementById('btnViewToggle');
+        if (viewMode === 'grid') {
+            main.classList.add('mode-grid');
+            // Ícone de Lista
+            iconBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>`;
+        } else {
+            main.classList.remove('mode-grid');
+            // Ícone de Grade
+            iconBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`;
+        }
+    }
+
+    function changeMonth(direction) {
+        currentDate.setMonth(currentDate.getMonth() + direction);
+        renderCalendar();
+    }
+
+    function getCycleIndex(dateString) {
+        if (!anchorDateStr) return -1;
+        const anchor = new Date(anchorDateStr + 'T00:00:00');
+        const target = new Date(dateString + 'T00:00:00');
+        const diffTime = target.getTime() - anchor.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        let cycleIndex = diffDays % 5;
+        if (cycleIndex < 0) cycleIndex += 5;
+        return cycleIndex;
+    }
+
+    function renderCalendar() {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        
+        const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+        document.getElementById('currentMonthYear').textContent = `${monthNames[month]} ${year}`;
+
+        const calendarEl = document.getElementById('calendar');
+        calendarEl.innerHTML = '';
+
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        // No modo grade, adiciona blocos vazios para alinhar ao dia da semana correto
+        if (viewMode === 'grid') {
+            const firstDayOfWeek = new Date(year, month, 1).getDay();
+            for (let i = 0; i < firstDayOfWeek; i++) {
+                const emptyCard = document.createElement('div');
+                emptyCard.className = 'day-card empty';
+                calendarEl.appendChild(emptyCard);
+            }
+        }
+        
+        for (let i = 1; i <= daysInMonth; i++) {
+            calendarEl.appendChild(createDayCard(year, month, i, false));
+        }
+
+        // Garante pelo menos 3 dias do mês seguinte
+        for (let i = 1; i <= 3; i++) {
+            let nextMonth = month + 1;
+            let nextYear = year;
+            if (nextMonth > 11) { nextMonth = 0; nextYear++; }
+            calendarEl.appendChild(createDayCard(nextYear, nextMonth, i, true));
+        }
+    }
+
+    function createDayCard(year, month, day, isNextMonth) {
+        const dateObj = new Date(year, month, day);
+        const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+        
+        const card = document.createElement('div');
+        card.className = `day-card ${isNextMonth ? 'next-month' : ''}`;
+
+        let shiftInfo = { label: 'Sem Escala', class: 'shift-folga', type: 'folga' };
+        let cycleIndex = getCycleIndex(dateString);
+        if (cycleIndex !== -1) {
+            shiftInfo = cycleDefinitions[cycleIndex];
+        }
+
+        let html = `
+            <div class="day-header">
+                <div class="day-info">
+                    <span class="day-number">${String(day).padStart(2, '0')}</span>
+                    <span class="day-name">${dayNames[dateObj.getDay()]}</span>
+                </div>
+                <span class="shift-badge ${shiftInfo.class}">${shiftInfo.label}</span>
+            </div>
+        `;
+
+        let dotsHtml = `<div class="grid-dots">`;
+
+        // Processa Especiais
+        if (appData.specials[dateString]) {
+            const sp = appData.specials[dateString];
+            let isEmendando = (cycleIndex === 0 || cycleIndex === 1);
+            let textAlert = `ESPECIAL: ${sp.start} às ${sp.end}`;
+            
+            if (isEmendando) {
+                textAlert += `<span class="emendando-tag">EMENDANDO</span>`;
+            }
+
+            html += `<div class="special-alert">${textAlert}</div>`;
+            dotsHtml += `<div class="dot dot-special"></div>`;
+        }
+
+        // Processa Eventos
+         // Processa Eventos
+        if (appData.events[dateString] && appData.events[dateString].length > 0) {
+            html += `<div class="event-list">`;
+            appData.events[dateString].forEach(ev => {
+                let firesHtml = '';
+                for(let i=0; i < ev.priority; i++) {
+                    firesHtml += `<div style="color: ${colorsMap[ev.priority]}">${fireSVG}</div>`;
+                }
+                html += `
+                    <div class="event-item">
+                        <div class="fire-icons">${firesHtml}</div>
+                        <div class="event-details">
+                            <span class="event-title">${ev.name}</span>
+                            ${ev.obs ? `<span class="event-obs">${ev.obs}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+                // Ponto para o modo grade
+                dotsHtml += `<div class="dot" style="background: ${colorsMap[ev.priority]}"></div>`;
+            });
+            html += `</div>`;
+        }
+        
+        dotsHtml += `</div>`;
+        html += dotsHtml; // Adiciona os pontinhos no final do card para o modo grade
+
+        card.innerHTML = html;
+        return card;
+    }
+
+    // Modal Add & Emendando Logic
+    function checkEmendandoAutoFill() {
+        if (currentFormType !== 'special') return;
+        const dateStr = document.getElementById('inputDate').value;
+        const aviso = document.getElementById('emendandoAviso');
+        if (!dateStr) return;
+        
+        let cycleIndex = getCycleIndex(dateStr);
+        if (cycleIndex === 0) {
+            // Plantão Dia - Emenda a noite
+            document.getElementById('specialStart').value = "18:00";
+            document.getElementById('specialEnd').value = "06:00";
+            aviso.style.display = "block";
+        } else if (cycleIndex === 1) {
+            // Plantão Noite - Emenda de dia
+            document.getElementById('specialStart').value = "06:00";
+            document.getElementById('specialEnd').value = "18:00";
+            aviso.style.display = "block";
+        } else {
+            aviso.style.display = "none";
+        }
+    }
+
+    function openConfigModal() {
+        document.getElementById('anchorDate').value = anchorDateStr;
+        document.getElementById('configModal').classList.add('active');
+    }
+
+    function openAddModal() {
+        const todayStr = new Date().toISOString().split('T')[0];
+        document.getElementById('inputDate').value = todayStr;
+        checkEmendandoAutoFill();
+        document.getElementById('addModal').classList.add('active');
+    }
+
+    function closeModals() {
+        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+    }
+
+    function switchFormType(type) {
+        currentFormType = type;
+        document.getElementById('btnTypeSpecial').classList.toggle('active', type === 'special');
+        document.getElementById('btnTypeEvent').classList.toggle('active', type === 'event');
+        document.getElementById('formSpecial').classList.toggle('hidden', type !== 'special');
+        document.getElementById('formEvent').classList.toggle('hidden', type !== 'event');
+        checkEmendandoAutoFill();
+    }
+
+    // Salvamentos
+    function saveConfig() {
+        const val = document.getElementById('anchorDate').value;
+        if (val) {
+            anchorDateStr = val;
+            localStorage.setItem('agendaGCM_anchor', anchorDateStr);
+            closeModals();
+            renderCalendar();
+        }
+    }
+
+    function saveRecord() {
+        const dateStr = document.getElementById('inputDate').value;
+        if (!dateStr) return alert('Selecione uma data.');
+
+        if (currentFormType === 'special') {
+            const start = document.getElementById('specialStart').value;
+            const end = document.getElementById('specialEnd').value;
+            appData.specials[dateStr] = { start, end };
+        } else {
+            const name = document.getElementById('eventName').value;
+            if (!name) return alert('Dê um nome ao evento.');
+            const priority = parseInt(document.getElementById('eventPriority').value);
+            const obs = document.getElementById('eventObs').value;
+            
+            if (!appData.events[dateStr]) appData.events[dateStr] = [];
+            appData.events[dateStr].push({ name, priority, obs });
+            
+            document.getElementById('eventName').value = '';
+            document.getElementById('eventObs').value = '';
+        }
+
+        localStorage.setItem('agendaGCM_data', JSON.stringify(appData));
+        closeModals();
+        renderCalendar();
+    }
+
+    init();
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
