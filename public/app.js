@@ -224,6 +224,20 @@ function toggleViewMode() {
   renderCalendar();
 }
 
+function setupGridScrollSync() {
+  const header = $('.week-days-header');
+  const grid = $('#calendar');
+  let syncing = false;
+  const sync = (from, to) => {
+    if (syncing) return;
+    syncing = true;
+    to.scrollLeft = from.scrollLeft;
+    syncing = false;
+  };
+  header.addEventListener('scroll', () => sync(header, grid));
+  grid.addEventListener('scroll', () => sync(grid, header));
+}
+
 function applyViewMode() {
   const main = $('#mainContent');
   const iconBtn = $('#btnViewToggle');
@@ -240,6 +254,8 @@ function renderCalendar() {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   $('#currentMonthYear').textContent = `${monthNames[month]} ${year}`;
+  const today = new Date();
+  $('#currentMonthYear').classList.toggle('month-current', year === today.getFullYear() && month === today.getMonth());
 
   const calendarEl = $('#calendar');
   calendarEl.innerHTML = '';
@@ -873,6 +889,7 @@ async function onInstallClick() {
   if (getToken()) boot();
   registerServiceWorker();
   setupInstallPrompt();
+  setupGridScrollSync();
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && getToken()) checkDueNotifications();
