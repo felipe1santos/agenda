@@ -1,0 +1,215 @@
+:root {
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --primary: #3b82f6;
+
+    /* Cores da Escala */
+    --cor-dia: #0ea5e9;
+    --cor-noite: #1e3a8a;
+    --cor-folga: #10b981;
+    --cor-especial: #ef4444; /* Vermelho */
+
+    /* Cores de Prioridade (1 a 5) */
+    --prio-1: #10b981; /* Verde */
+    --prio-2: #f59e0b; /* Laranja */
+    --prio-3: #8b5cf6; /* Roxo */
+    --prio-4: #d946ef; /* Transição Rosa/Roxo */
+    --prio-5: #ef4444; /* Vermelho */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+body, html { height: 100vh; background-color: var(--bg-color); color: var(--text-main); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+.hidden { display: none !important; }
+
+/* ===================== LOGIN ===================== */
+.login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.login-card { background: var(--card-bg); border-radius: 16px; padding: 32px 24px; width: 100%; max-width: 360px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 12px; text-align: center; }
+.login-card h1 { font-size: 20px; margin-bottom: 4px; }
+.login-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
+.login-error { color: var(--cor-especial); font-size: 13px; font-weight: bold; }
+
+/* ===================== APP SHELL ===================== */
+#app { max-width: 480px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; position: relative; }
+
+@media (min-width: 768px) {
+    #app { max-width: 900px; }
+}
+
+/* Header */
+header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; border-bottom: 1px solid var(--border-color); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.header-left { display: flex; align-items: center; flex: 1; min-width: 0; }
+.month-selector { display: flex; align-items: center; gap: 12px; }
+.month-selector button { background: none; border: none; font-size: 20px; color: var(--primary); padding: 5px; cursor: pointer; }
+.month-selector h2, .tab-title { font-size: 16px; text-transform: capitalize; }
+.tab-title { font-size: 18px; font-weight: bold; }
+.header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.btn-icon { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 6px; min-width: 36px; min-height: 36px; }
+
+/* Container Principal */
+.main-content { flex-grow: 1; overflow-y: auto; padding-bottom: 96px; display: flex; flex-direction: column; }
+.tab-panel { display: flex; flex-direction: column; flex: 1; }
+
+/* Cabeçalho de Dias da Semana (Modo Grade) */
+.week-days-header { display: none; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 11px; font-weight: bold; color: var(--text-muted); padding: 8px 4px 4px 4px; background: var(--bg-color); position: sticky; top: 0; z-index: 5; }
+
+/* ===================== LISTA DE DIAS (MODO PADRÃO) ===================== */
+.days-container { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+.day-card { background: var(--card-bg); border-radius: 14px; padding: 16px; border: 1px solid var(--border-color); box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+.day-card.next-month { opacity: 0.6; background: #f1f5f9; border-color: #cbd5e1; }
+.day-card.next-month .day-number { color: #94a3b8; }
+
+.day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.day-info { display: flex; align-items: baseline; gap: 8px; }
+.day-number { font-size: 26px; font-weight: bold; }
+.day-name { font-size: 14px; color: var(--text-muted); text-transform: capitalize; }
+
+/* Badges de Turno */
+.shift-badge { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; text-align: center; }
+.shift-dia { background-color: var(--cor-dia); }
+.shift-noite { background-color: var(--cor-noite); }
+.shift-folga { background-color: var(--cor-folga); color: white; }
+
+/* Especiais e Eventos */
+.special-alert { background: #fee2e2; color: var(--cor-especial); border-left: 4px solid var(--cor-especial); padding: 8px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-bottom: 8px; line-height: 1.4; }
+.emendando-tag { display: inline-block; background: var(--cor-especial); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; vertical-align: middle; }
+
+.event-list { display: flex; flex-direction: column; gap: 6px; }
+.event-item { background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.event-item.done .event-title { text-decoration: line-through; opacity: 0.55; }
+.fire-icons { display: flex; gap: 2px; flex-shrink: 0; }
+.fire-icons svg { width: 14px; height: 14px; }
+.event-details { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.event-title { font-weight: 600; }
+.event-obs { font-size: 12px; color: var(--text-muted); }
+.event-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.event-actions button { border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 6px; font-size: 12px; padding: 5px 8px; cursor: pointer; color: var(--text-muted); }
+
+/* ===================== MODO GRADE (CARDS MAIORES) ===================== */
+.main-content.mode-grid { padding-bottom: 96px; }
+.mode-grid .week-days-header { display: grid; }
+.mode-grid .days-container {
+    padding: 4px;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: minmax(82px, 1fr);
+    gap: 4px;
+}
+.mode-grid .day-card {
+    padding: 6px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: 8px;
+    margin: 0;
+    cursor: pointer;
+    overflow: hidden;
+}
+.mode-grid .day-card.empty { background: transparent; border: none; box-shadow: none; cursor: default; }
+.mode-grid .day-header { margin-bottom: 4px; width: 100%; display: block; }
+.mode-grid .day-info { gap: 0; }
+.mode-grid .day-name { display: none; }
+.mode-grid .day-number { font-size: 16px; }
+.mode-grid .shift-badge { display: none; }
+.mode-grid .special-alert, .mode-grid .event-list { display: none; }
+
+/* Fitinha/tag dentro do card da grade */
+.day-tags { display: flex; flex-direction: column; gap: 2px; margin-top: auto; }
+.day-tag { font-size: 10px; font-weight: bold; color: white; border-radius: 4px; padding: 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
+.day-tag-dia { background-color: var(--cor-dia); }
+.day-tag-noite { background-color: var(--cor-noite); }
+.day-tag-especial { background-color: var(--cor-especial); }
+.day-tag-task { background-color: var(--primary); }
+.day-tag-more { background-color: var(--text-muted); text-align: center; }
+
+@media (min-width: 768px) {
+    .mode-grid .days-container { grid-auto-rows: minmax(120px, 1fr); }
+    .mode-grid .day-number { font-size: 20px; }
+    .mode-grid .day-tag { font-size: 12px; padding: 3px 6px; }
+}
+
+/* ===================== TABS: TAREFAS / PROJETOS / COMPRAS ===================== */
+.list-section { padding: 12px 16px; }
+.section-title { font-size: 15px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 10px; }
+.section-title.collapsible { cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.chevron { transition: transform 0.2s; }
+.item-list.collapsed, .project-list.collapsed { display: none; }
+.section-title.collapsible.open .chevron { transform: rotate(180deg); }
+
+.item-list { display: flex; flex-direction: column; gap: 8px; }
+.empty-state { color: var(--text-muted); font-size: 13px; text-align: center; padding: 16px; background: var(--card-bg); border: 1px dashed var(--border-color); border-radius: 12px; }
+
+.list-item { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px; }
+.check-circle { width: 26px; height: 26px; min-width: 26px; border-radius: 50%; border: 2px solid var(--border-color); background: var(--card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; color: white; flex-shrink: 0; }
+.list-item.done .check-circle { background: var(--cor-folga); border-color: var(--cor-folga); }
+.item-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.item-title { font-weight: 600; font-size: 15px; word-break: break-word; }
+.list-item.done .item-title { text-decoration: line-through; opacity: 0.55; }
+.item-meta { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.icon-btn { border: 1px solid var(--border-color); background: var(--bg-color); border-radius: 8px; min-width: 36px; min-height: 36px; font-size: 14px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+
+/* ===================== PROJETOS ===================== */
+.project-list { display: flex; flex-direction: column; gap: 12px; }
+.project-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; }
+.project-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.project-title { font-weight: bold; font-size: 16px; word-break: break-word; }
+.project-card.done .project-title { text-decoration: line-through; opacity: 0.6; }
+.progress-bar { background: var(--bg-color); border-radius: 8px; height: 8px; overflow: hidden; margin-bottom: 4px; }
+.progress-fill { background: var(--primary); height: 100%; transition: width 0.2s; }
+.project-card.done .progress-fill { background: var(--cor-folga); }
+.progress-label { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+.step-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.step-item { padding: 8px 10px; border-radius: 8px; }
+.add-step-row { display: flex; gap: 8px; }
+.add-step-row input { flex: 1; }
+
+/* ===================== COMPRAS ===================== */
+.shopping-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.link-btn { background: none; border: none; color: var(--primary); font-size: 12px; font-weight: bold; cursor: pointer; padding: 4px; }
+.shopping-input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.shopping-input-row input { flex: 1; }
+.btn-add { background: var(--primary); color: white; border: none; border-radius: 8px; min-width: 44px; font-size: 22px; line-height: 1; cursor: pointer; }
+
+/* ===================== BOTTOM NAV ===================== */
+.bottom-nav { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: var(--card-bg); border-top: 1px solid var(--border-color); display: flex; z-index: 20; }
+.nav-btn { flex: 1; background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 6px 2px; }
+.nav-btn.active { color: var(--primary); }
+
+/* Floating Action Button (FAB) */
+.fab { position: absolute; bottom: 78px; right: 20px; width: 56px; height: 56px; background: var(--primary); color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 28px; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); border: none; cursor: pointer; z-index: 20; }
+
+/* ===================== MODALS ===================== */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: flex-end; z-index: 30; }
+.modal-overlay.active { display: flex; }
+.modal-content { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 24px; animation: slideUp 0.3s ease-out; max-height: 90vh; overflow-y: auto; }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.modal-header h3 { font-size: 18px; }
+.btn-close { background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer; }
+
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 14px; color: var(--text-muted); margin-bottom: 6px; }
+.form-control { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; background: var(--bg-color); color: var(--text-main); }
+.form-control:focus { outline: none; border-color: var(--primary); }
+.form-control:disabled { opacity: 0.6; }
+.form-row { display: flex; gap: 10px; }
+.hint { display: block; margin-top: 5px; color: var(--text-muted); font-size: 12px; }
+.hint-special { color: var(--cor-especial); font-weight: bold; }
+.confirm-message { font-size: 14px; color: var(--text-main); margin-bottom: 16px; line-height: 1.5; }
+
+.type-selector { display: flex; gap: 10px; margin-bottom: 20px; }
+.type-btn { flex: 1; padding: 10px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 8px; font-size: 14px; cursor: pointer; }
+.type-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+.btn-submit { width: 100%; background: var(--primary); color: white; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+.btn-secondary { width: 100%; background: var(--bg-color); color: var(--text-main); padding: 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+.btn-danger { background: var(--cor-especial); }
+
+.day-sheet-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
