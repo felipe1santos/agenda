@@ -224,20 +224,6 @@ function toggleViewMode() {
   renderCalendar();
 }
 
-function setupGridScrollSync() {
-  const header = $('.week-days-header');
-  const grid = $('#calendar');
-  let syncing = false;
-  const sync = (from, to) => {
-    if (syncing) return;
-    syncing = true;
-    to.scrollLeft = from.scrollLeft;
-    syncing = false;
-  };
-  header.addEventListener('scroll', () => sync(header, grid));
-  grid.addEventListener('scroll', () => sync(grid, header));
-}
-
 function applyViewMode() {
   const main = $('#mainContent');
   const iconBtn = $('#btnViewToggle');
@@ -261,15 +247,6 @@ function renderCalendar() {
   calendarEl.innerHTML = '';
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  if (viewMode === 'grid') {
-    const firstDayOfWeek = new Date(year, month, 1).getDay();
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      const empty = document.createElement('div');
-      empty.className = 'day-card empty';
-      calendarEl.appendChild(empty);
-    }
-  }
 
   for (let i = 1; i <= daysInMonth; i++) calendarEl.appendChild(createDayCard(year, month, i, false));
 
@@ -889,7 +866,6 @@ async function onInstallClick() {
   if (getToken()) boot();
   registerServiceWorker();
   setupInstallPrompt();
-  setupGridScrollSync();
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && getToken()) checkDueNotifications();

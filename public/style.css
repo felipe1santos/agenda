@@ -93,25 +93,14 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 
 /* ===================== MODO GRADE (CARDS MAIORES) ===================== */
 .main-content.mode-grid { padding-bottom: 96px; }
-.mode-grid .week-days-header {
-    display: grid;
-    grid-template-columns: repeat(7, 104px);
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-.mode-grid .week-days-header::-webkit-scrollbar { display: none; }
+.mode-grid .week-days-header { display: none; }
 .mode-grid .days-container {
     padding: 4px;
     display: grid;
-    grid-template-columns: repeat(7, 104px);
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     grid-auto-rows: minmax(128px, auto);
     gap: 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
 }
-.mode-grid .days-container::-webkit-scrollbar { display: none; }
 .mode-grid .day-card {
     padding: 8px 6px;
     display: flex;
@@ -122,7 +111,6 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
     cursor: pointer;
     overflow: hidden;
 }
-.mode-grid .day-card.empty { background: transparent; border: none; box-shadow: none; cursor: default; }
 .mode-grid .day-header { margin-bottom: 4px; width: 100%; display: block; }
 .mode-grid .day-info { gap: 0; }
 .mode-grid .day-name { display: none; }
@@ -140,8 +128,7 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 .day-tag-more { background-color: var(--text-muted); text-align: center; }
 
 @media (min-width: 768px) {
-    .mode-grid .days-container, .mode-grid .week-days-header { grid-template-columns: repeat(7, 248px); }
-    .mode-grid .days-container { grid-auto-rows: minmax(160px, auto); }
+    .mode-grid .days-container { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); grid-auto-rows: minmax(160px, auto); }
     .mode-grid .day-number { font-size: 24px; }
     .mode-grid .day-tag { font-size: 13px; padding: 4px 7px; }
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agenda-shell-v4';
+const CACHE_NAME = 'agenda-shell-v5';
 const SHELL_FILES = [
   '/',
   '/index.html',
