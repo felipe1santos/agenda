@@ -3,6 +3,12 @@ const fireSVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 11c
 
 const colorsMap = { 1: 'var(--prio-1)', 2: 'var(--prio-2)', 3: 'var(--prio-3)', 4: 'var(--prio-4)', 5: 'var(--prio-5)' };
 
+function fireBadge(priority) {
+  if (!priority) return '';
+  const c = colorsMap[priority];
+  return `<div class="fire-badge" style="background-color:color-mix(in srgb, ${c} 18%, white); color:${c}">${fireSVG}</div>`;
+}
+
 const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const dayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -128,6 +134,7 @@ async function boot() {
     applyViewMode();
     switchTab('calendar');
     if (!state.config.anchorDate) openConfigModal();
+    checkDueNotifications();
   } catch (e) {
     if (e.message !== 'unauthorized') console.error(e);
   }
@@ -153,7 +160,7 @@ function getShiftInfo(dateString) {
 
 // ===================== Tabs ===================== //
 const TABS = ['calendar', 'tasks', 'projects', 'shopping'];
-const TAB_TITLES = { tasks: 'Tarefas', projects: 'Projetos', shopping: 'Compras' };
+const TAB_TITLES = { tasks: 'Tarefas', projects: 'Projetos', shopping: 'Lista' };
 
 function switchTab(tab) {
   currentTab = tab;
@@ -271,7 +278,10 @@ function getDayTags(dateStr, shift) {
   state.tasks
     .filter((t) => t.date === dateStr && !t.done)
     .sort((a, b) => (b.priority || 0) - (a.priority || 0))
-    .forEach((t) => tags.push({ label: t.title, cls: 'day-tag-task', style: t.priority ? `background-color:${colorsMap[t.priority]}` : '' }));
+    .forEach((t) => {
+      const color = t.priority ? colorsMap[t.priority] : 'var(--text-muted)';
+      tags.push({ label: t.title, cls: 'day-tag-task', style: `background-color:color-mix(in srgb, ${color} 18%, white); color:${color}` });
+    });
 
   return tags;
 }
@@ -329,15 +339,14 @@ function renderDayBody(dateStr, shift) {
   if (dayTasks.length) {
     html += '<div class="event-list">';
     dayTasks.forEach((t) => {
-      let fires = '';
-      if (t.priority) for (let i = 0; i < t.priority; i++) fires += `<div style="color:${colorsMap[t.priority]}">${fireSVG}</div>`;
+      const fire = fireBadge(t.priority);
       const actions = t.done
         ? `<button onclick="event.stopPropagation(); reopenTask('${t.id}')">↩ Reabrir</button>`
         : `<button onclick="event.stopPropagation(); completeTask('${t.id}')">✓ Concluir</button>
            <button onclick="event.stopPropagation(); sendToBacklog('${t.id}')">↩ Sem data</button>`;
       html += `
         <div class="event-item ${t.done ? 'done' : ''}">
-          ${fires ? `<div class="fire-icons">${fires}</div>` : ''}
+          ${fire}
           <div class="event-details">
             <span class="event-title">${escapeHtml(t.title)}</span>
             ${t.obs ? `<span class="event-obs">${escapeHtml(t.obs)}</span>` : ''}
@@ -410,12 +419,16 @@ function openAddRecordModal(dateStr, defaultType) {
   if (state.specials[dateStr]) {
     $('#specialStart').value = state.specials[dateStr].start;
     $('#specialEnd').value = state.specials[dateStr].end;
+    $('#specialNotify').checked = !!state.specials[dateStr].notify;
     $('#btnDeleteSpecial').classList.remove('hidden');
   } else {
     $('#specialStart').value = '18:00';
     $('#specialEnd').value = '06:00';
+    $('#specialNotify').checked = false;
     $('#btnDeleteSpecial').classList.add('hidden');
   }
+
+  $('#taskNotify').checked = false;
 
   checkEmendandoAutoFill();
   openModal('addRecordModal');
@@ -428,19 +441,22 @@ async function saveRecord() {
   if (currentFormType === 'special') {
     const start = $('#specialStart').value;
     const end = $('#specialEnd').value;
-    const saved = await api(`/api/specials/${dateStr}`, 'PUT', { start, end });
-    state.specials[dateStr] = { start: saved.start, end: saved.end };
+    const notify = $('#specialNotify').checked;
+    const saved = await api(`/api/specials/${dateStr}`, 'PUT', { start, end, notify });
+    state.specials[dateStr] = { start: saved.start, end: saved.end, notify: saved.notify };
   } else {
     const title = $('#taskTitle').value.trim();
     if (!title) return alert('Dê um título à tarefa.');
     const priorityVal = $('#taskPriority').value;
     const priority = priorityVal ? parseInt(priorityVal, 10) : null;
     const obs = $('#taskObs').value.trim() || null;
-    const created = await api('/api/tasks', 'POST', { title, date: dateStr, priority, obs });
+    const notify = $('#taskNotify').checked;
+    const created = await api('/api/tasks', 'POST', { title, date: dateStr, priority, obs, notify });
     state.tasks.push(created);
     $('#taskTitle').value = '';
     $('#taskObs').value = '';
     $('#taskPriority').value = '';
+    $('#taskNotify').checked = false;
   }
 
   closeModals();
@@ -474,8 +490,7 @@ function renderTaskList(containerId, items, context) {
 }
 
 function taskListItemHtml(t, context) {
-  let fires = '';
-  if (t.priority) for (let i = 0; i < t.priority; i++) fires += `<div style="color:${colorsMap[t.priority]}">${fireSVG}</div>`;
+  const fire = fireBadge(t.priority);
 
   const metaParts = [];
   if (t.date) metaParts.push(formatDateBR(t.date));
@@ -496,8 +511,8 @@ function taskListItemHtml(t, context) {
       <button class="icon-btn" title="Excluir" onclick="confirmDeleteTask('${t.id}')">🗑</button>`;
   }
 
-  const meta = (fires || metaParts.length)
-    ? `<div class="item-meta">${fires ? `<div class="fire-icons">${fires}</div>` : ''}${metaParts.map((m) => `<span>${m}</span>`).join(' · ')}</div>`
+  const meta = (fire || metaParts.length)
+    ? `<div class="item-meta">${fire}${metaParts.map((m) => `<span>${m}</span>`).join(' · ')}</div>`
     : '';
 
   return `
@@ -520,6 +535,7 @@ function openTaskModal(id, defaultDate) {
   $('#taskModalDate').value = task ? (task.date || '') : (defaultDate || '');
   $('#taskModalPriority').value = task && task.priority ? String(task.priority) : '';
   $('#taskModalObs').value = task ? (task.obs || '') : '';
+  $('#taskModalNotify').checked = task ? !!task.notify : false;
   openModal('taskModal');
 }
 
@@ -531,13 +547,14 @@ async function saveTaskModal() {
   const priorityVal = $('#taskModalPriority').value;
   const priority = priorityVal ? parseInt(priorityVal, 10) : null;
   const obs = $('#taskModalObs').value.trim() || null;
+  const notify = $('#taskModalNotify').checked;
 
   if (id) {
-    const updated = await api(`/api/tasks/${id}`, 'PUT', { title, date, priority, obs });
+    const updated = await api(`/api/tasks/${id}`, 'PUT', { title, date, priority, obs, notify });
     const idx = state.tasks.findIndex((t) => t.id === id);
     state.tasks[idx] = updated;
   } else {
-    const created = await api('/api/tasks', 'POST', { title, date, priority, obs });
+    const created = await api('/api/tasks', 'POST', { title, date, priority, obs, notify });
     state.tasks.push(created);
   }
 
@@ -588,8 +605,14 @@ function projectCardHtml(p) {
   const stepsHtml = p.steps.map((s) => `
     <div class="list-item step-item ${s.done ? 'done' : ''}">
       <button class="check-circle" onclick="toggleStep('${p.id}','${s.id}',${!s.done})">${s.done ? '✓' : ''}</button>
-      <div class="item-content"><div class="item-title">${escapeHtml(s.title)}</div></div>
-      <div class="item-actions"><button class="icon-btn" title="Excluir" onclick="deleteStep('${p.id}','${s.id}')">🗑</button></div>
+      <div class="item-content">
+        <div class="item-title">${escapeHtml(s.title)}</div>
+        ${s.obs ? `<div class="item-obs">${escapeHtml(s.obs)}</div>` : ''}
+      </div>
+      <div class="item-actions">
+        <button class="icon-btn" title="Observação" onclick="editStepObs('${p.id}','${s.id}')">📝</button>
+        <button class="icon-btn" title="Excluir" onclick="deleteStep('${p.id}','${s.id}')">🗑</button>
+      </div>
     </div>
   `).join('');
 
@@ -634,6 +657,16 @@ async function toggleStep(pid, sid, done) {
 
 async function deleteStep(pid, sid) {
   const updated = await api(`/api/projects/${pid}/steps/${sid}`, 'DELETE');
+  replaceProject(updated);
+  renderAll();
+}
+
+async function editStepObs(pid, sid) {
+  const project = state.projects.find((p) => p.id === pid);
+  const step = project && project.steps.find((s) => s.id === sid);
+  const obs = window.prompt('Observação da etapa:', (step && step.obs) || '');
+  if (obs === null) return;
+  const updated = await api(`/api/projects/${pid}/steps/${sid}`, 'PUT', { obs: obs.trim() || null });
   replaceProject(updated);
   renderAll();
 }
@@ -748,6 +781,58 @@ async function saveConfig() {
   renderAll();
 }
 
+// ===================== Notificações ===================== //
+const NOTIFIED_KEY = 'agendaNotified';
+
+function ensureNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function getNotifiedToday() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NOTIFIED_KEY) || 'null');
+    if (raw && raw.date === todayISO()) return raw.ids;
+  } catch {}
+  return [];
+}
+
+function saveNotifiedToday(ids) {
+  localStorage.setItem(NOTIFIED_KEY, JSON.stringify({ date: todayISO(), ids }));
+}
+
+async function showAppNotification(title, body) {
+  if ('serviceWorker' in navigator) {
+    const reg = await navigator.serviceWorker.ready;
+    reg.showNotification(title, { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png' });
+  } else {
+    new Notification(title, { body });
+  }
+}
+
+async function checkDueNotifications() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const today = todayISO();
+  const notified = getNotifiedToday();
+  const newlyNotified = [];
+
+  for (const t of state.tasks) {
+    if (t.date === today && !t.done && t.notify && !notified.includes('task:' + t.id)) {
+      await showAppNotification('Tarefa de hoje', t.title);
+      newlyNotified.push('task:' + t.id);
+    }
+  }
+
+  const sp = state.specials[today];
+  if (sp && sp.notify && !notified.includes('special:' + today)) {
+    await showAppNotification('Especial hoje', `${sp.start} às ${sp.end}`);
+    newlyNotified.push('special:' + today);
+  }
+
+  if (newlyNotified.length) saveNotifiedToday([...notified, ...newlyNotified]);
+}
+
 // ===================== PWA ===================== //
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
@@ -788,4 +873,9 @@ async function onInstallClick() {
   if (getToken()) boot();
   registerServiceWorker();
   setupInstallPrompt();
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && getToken()) checkDueNotifications();
+  });
+  setInterval(() => { if (getToken()) checkDueNotifications(); }, 5 * 60 * 1000);
 })();

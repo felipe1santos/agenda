@@ -129,8 +129,8 @@
             <span>Projetos</span>
         </button>
         <button class="nav-btn" data-tab="shopping" onclick="switchTab('shopping')">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
-            <span>Compras</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            <span>Lista</span>
         </button>
     </nav>
 </div>
@@ -192,6 +192,7 @@
                     <input type="time" id="specialEnd" class="form-control" value="06:00" oninput="specialTimeTouched = true">
                 </div>
             </div>
+            <label class="checkbox-row"><input type="checkbox" id="specialNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
             <button class="btn-secondary" id="btnDeleteSpecial" onclick="deleteSpecialFromModal()">Remover Especial deste dia</button>
         </div>
 
@@ -208,13 +209,14 @@
                     <option value="2">2 - Laranja</option>
                     <option value="3">3 - Roxo</option>
                     <option value="4">4 - Rosa Escuro</option>
-                    <option value="5">5 - Vermelho (Máxima)</option>
+                    <option value="5">5 - Preto (Máxima)</option>
                 </select>
             </div>
             <div class="form-group">
                 <label>Observação</label>
                 <input type="text" id="taskObs" class="form-control" placeholder="Detalhes adicionais...">
             </div>
+            <label class="checkbox-row"><input type="checkbox" id="taskNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
         </div>
 
         <button class="btn-submit" onclick="saveRecord()">Salvar</button>
@@ -246,13 +248,14 @@
                 <option value="2">2 - Laranja</option>
                 <option value="3">3 - Roxo</option>
                 <option value="4">4 - Rosa Escuro</option>
-                <option value="5">5 - Vermelho (Máxima)</option>
+                <option value="5">5 - Preto (Máxima)</option>
             </select>
         </div>
         <div class="form-group">
             <label>Observação</label>
             <input type="text" id="taskModalObs" class="form-control" placeholder="Detalhes adicionais...">
         </div>
+        <label class="checkbox-row"><input type="checkbox" id="taskModalNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
         <button class="btn-submit" onclick="saveTaskModal()">Salvar</button>
     </div>
 </div>

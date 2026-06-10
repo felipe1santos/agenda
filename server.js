@@ -67,6 +67,15 @@ if (!db.prepare('SELECT id FROM config WHERE id = 1').get()) {
   db.prepare('INSERT INTO config (id, anchor_date, cycle_length) VALUES (1, NULL, 9)').run();
 }
 
+// ---------- Migrações leves (colunas novas em bancos já existentes) ----------
+for (const stmt of [
+  'ALTER TABLE tasks ADD COLUMN notify INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE specials ADD COLUMN notify INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE project_steps ADD COLUMN obs TEXT',
+]) {
+  try { db.exec(stmt); } catch (e) { /* coluna já existe */ }
+}
+
 // ---------- Auth ----------
 const SERVER_SECRET = crypto.randomBytes(32).toString('hex');
 const VALID_TOKEN = crypto.createHmac('sha256', SERVER_SECRET).update(APP_PASSWORD).digest('hex');
@@ -112,7 +121,7 @@ function serializeProject(project, steps) {
     title: project.title,
     done: !!project.done,
     createdAt: project.created_at,
-    steps: steps.map((s) => ({ id: s.id, title: s.title, done: !!s.done })),
+    steps: steps.map((s) => ({ id: s.id, title: s.title, done: !!s.done, obs: s.obs })),
   };
 }
 
@@ -132,7 +141,7 @@ app.get('/api/state', (req, res) => {
 
   const specials = {};
   for (const row of db.prepare('SELECT * FROM specials').all()) {
-    specials[row.date] = { start: row.start, end: row.end };
+    specials[row.date] = { start: row.start, end: row.end, notify: !!row.notify };
   }
 
   const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at ASC').all().map((t) => ({
@@ -142,6 +151,7 @@ app.get('/api/state', (req, res) => {
     priority: t.priority,
     obs: t.obs,
     done: !!t.done,
+    notify: !!t.notify,
   }));
 
   const projectRows = db.prepare('SELECT * FROM projects ORDER BY created_at ASC').all();
@@ -175,13 +185,13 @@ app.put('/api/config', (req, res) => {
 // ---------- Specials ----------
 app.put('/api/specials/:date', (req, res) => {
   const { date } = req.params;
-  const { start, end } = req.body || {};
+  const { start, end, notify } = req.body || {};
   if (!start || !end) return res.status(400).json({ error: 'start e end são obrigatórios' });
   db.prepare(`
-    INSERT INTO specials (date, start, end) VALUES (?, ?, ?)
-    ON CONFLICT(date) DO UPDATE SET start = excluded.start, end = excluded.end
-  `).run(date, start, end);
-  res.json({ date, start, end });
+    INSERT INTO specials (date, start, end, notify) VALUES (?, ?, ?, ?)
+    ON CONFLICT(date) DO UPDATE SET start = excluded.start, end = excluded.end, notify = excluded.notify
+  `).run(date, start, end, toBool(notify));
+  res.json({ date, start, end, notify: !!notify });
 });
 
 app.delete('/api/specials/:date', (req, res) => {
@@ -191,14 +201,14 @@ app.delete('/api/specials/:date', (req, res) => {
 
 // ---------- Tasks ----------
 app.post('/api/tasks', (req, res) => {
-  const { title, date, priority, obs } = req.body || {};
+  const { title, date, priority, obs, notify } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: 'title é obrigatório' });
   const id = uuid();
   db.prepare(`
-    INSERT INTO tasks (id, title, date, priority, obs, done, created_at)
-    VALUES (?, ?, ?, ?, ?, 0, ?)
-  `).run(id, title.trim(), date || null, priority ?? null, obs || null, now());
-  res.status(201).json({ id, title: title.trim(), date: date || null, priority: priority ?? null, obs: obs || null, done: false });
+    INSERT INTO tasks (id, title, date, priority, obs, done, created_at, notify)
+    VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+  `).run(id, title.trim(), date || null, priority ?? null, obs || null, now(), toBool(notify));
+  res.status(201).json({ id, title: title.trim(), date: date || null, priority: priority ?? null, obs: obs || null, done: false, notify: !!notify });
 });
 
 app.put('/api/tasks/:id', (req, res) => {
@@ -210,11 +220,12 @@ app.put('/api/tasks/:id', (req, res) => {
   const priority = Object.prototype.hasOwnProperty.call(body, 'priority') ? body.priority : existing.priority;
   const obs = Object.prototype.hasOwnProperty.call(body, 'obs') ? body.obs : existing.obs;
   const done = Object.prototype.hasOwnProperty.call(body, 'done') ? toBool(body.done) : existing.done;
+  const notify = Object.prototype.hasOwnProperty.call(body, 'notify') ? toBool(body.notify) : existing.notify;
 
-  db.prepare('UPDATE tasks SET title = ?, date = ?, priority = ?, obs = ?, done = ? WHERE id = ?')
-    .run(title, date, priority, obs, done, req.params.id);
+  db.prepare('UPDATE tasks SET title = ?, date = ?, priority = ?, obs = ?, done = ?, notify = ? WHERE id = ?')
+    .run(title, date, priority, obs, done, notify, req.params.id);
 
-  res.json({ id: req.params.id, title, date, priority, obs, done: !!done });
+  res.json({ id: req.params.id, title, date, priority, obs, done: !!done, notify: !!notify });
 });
 
 app.delete('/api/tasks/:id', (req, res) => {
@@ -250,13 +261,13 @@ app.put('/api/projects/:id', (req, res) => {
 app.post('/api/projects/:id/steps', (req, res) => {
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!project) return res.status(404).json({ error: 'not_found' });
-  const { title } = req.body || {};
+  const { title, obs } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: 'title é obrigatório' });
   const maxPos = db.prepare('SELECT MAX(position) as maxPos FROM project_steps WHERE project_id = ?').get(req.params.id);
   const position = (maxPos.maxPos ?? -1) + 1;
   const id = uuid();
-  db.prepare('INSERT INTO project_steps (id, project_id, title, done, position) VALUES (?, ?, ?, 0, ?)')
-    .run(id, req.params.id, title.trim(), position);
+  db.prepare('INSERT INTO project_steps (id, project_id, title, done, position, obs) VALUES (?, ?, ?, 0, ?, ?)')
+    .run(id, req.params.id, title.trim(), position, obs || null);
   recomputeProjectDone(req.params.id);
   res.status(201).json(getProjectWithSteps(req.params.id));
 });
@@ -267,7 +278,8 @@ app.put('/api/projects/:pid/steps/:sid', (req, res) => {
   const body = req.body || {};
   const title = Object.prototype.hasOwnProperty.call(body, 'title') ? body.title.trim() : step.title;
   const done = Object.prototype.hasOwnProperty.call(body, 'done') ? toBool(body.done) : step.done;
-  db.prepare('UPDATE project_steps SET title = ?, done = ? WHERE id = ?').run(title, done, req.params.sid);
+  const obs = Object.prototype.hasOwnProperty.call(body, 'obs') ? body.obs : step.obs;
+  db.prepare('UPDATE project_steps SET title = ?, done = ?, obs = ? WHERE id = ?').run(title, done, obs, req.params.sid);
   recomputeProjectDone(req.params.pid);
   res.json(getProjectWithSteps(req.params.pid));
 });
