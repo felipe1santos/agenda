@@ -20,9 +20,11 @@ Acesse `http://localhost:3000`. Senha padrão: `agenda123` (defina
 No primeiro acesso, abra Configurações (ícone ⚙️) e informe:
 
 - **Data de um Plantão de DIA (06h-18h)** — qualquer data conhecida desse turno.
-- **Duração total do ciclo (dias)** — padrão `9` (1 dia + 1 noite + 7 folgas).
-  O dia seguinte ao "Plantão DIA" vira automaticamente "Plantão NOITE", e o
-  restante do ciclo é folga. O app recalcula o ano inteiro a partir disso.
+- **Dias de folga após o Plantão de Noite** — padrão `7`.
+
+O dia seguinte ao "Plantão DIA" vira automaticamente "Plantão NOITE"; depois
+vêm os dias de folga informados. Esse ciclo (Dia → Noite → Folgas) se repete
+infinitamente, dia após dia, para sempre — até você alterar a configuração.
 
 ## Variáveis de ambiente
 

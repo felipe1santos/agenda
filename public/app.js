@@ -17,6 +17,7 @@ let currentDate = new Date();
 let viewMode = localStorage.getItem('agendaViewMode') || 'list';
 let currentTab = 'calendar';
 let currentFormType = 'special';
+let specialTimeTouched = false;
 let currentSheetDate = null;
 let deferredPrompt = null;
 
@@ -38,6 +39,11 @@ function formatDate(year, month, day) {
 function formatDateBR(dateStr) {
   const [, m, d] = dateStr.split('-');
   return `${d}/${m}`;
+}
+
+function formatDateBRFull(dateStr) {
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 function todayISO() {
@@ -281,8 +287,12 @@ function createDayCard(year, month, day, isNextMonth) {
   if (viewMode === 'grid') {
     const tags = getDayTags(dateStr, shift);
     let tagsHtml = '<div class="day-tags">';
-    if (tags[0]) tagsHtml += `<div class="day-tag ${tags[0].cls}" style="${tags[0].style || ''}">${escapeHtml(tags[0].label)}</div>`;
-    if (tags.length > 1) tagsHtml += `<div class="day-tag day-tag-more">+${tags.length - 1}</div>`;
+    const overflow = tags.length > 5;
+    const visibleTags = overflow ? tags.slice(0, 4) : tags;
+    visibleTags.forEach((tag) => {
+      tagsHtml += `<div class="day-tag ${tag.cls}" style="${tag.style || ''}">${escapeHtml(tag.label)}</div>`;
+    });
+    if (overflow) tagsHtml += `<div class="day-tag day-tag-more">+${tags.length - 4} eventos</div>`;
     tagsHtml += '</div>';
 
     card.innerHTML = `
@@ -381,17 +391,19 @@ function checkEmendandoAutoFill() {
   if (!dateStr || !state.config.anchorDate) { aviso.classList.add('hidden'); return; }
 
   const idx = getCycleIndex(dateStr);
-  const isEmendando = idx === 0 || idx === 1;
+  const isEmendando = (idx === 0 || idx === 1) && currentFormType === 'special';
   aviso.classList.toggle('hidden', !isEmendando);
 
   if (currentFormType !== 'special') return;
   if (state.specials[dateStr]) return;
+  if (specialTimeTouched) return;
 
   if (idx === 0) { $('#specialStart').value = '18:00'; $('#specialEnd').value = '06:00'; }
   else if (idx === 1) { $('#specialStart').value = '06:00'; $('#specialEnd').value = '18:00'; }
 }
 
 function openAddRecordModal(dateStr, defaultType) {
+  specialTimeTouched = false;
   $('#inputDate').value = dateStr;
   switchFormType(defaultType || 'special');
 
@@ -713,20 +725,23 @@ function clearShoppingDone(category) {
 // ===================== Configurações ===================== //
 function openConfigModal() {
   $('#anchorDiaDate').value = state.config.anchorDate || '';
-  $('#cycleLength').value = state.config.cycleLength || 9;
+  const folgaDays = (state.config.cycleLength || 9) - 2;
+  $('#folgaDays').value = folgaDays >= 1 ? folgaDays : 7;
   syncNoiteDate();
   openModal('configModal');
 }
 
 function syncNoiteDate() {
   const dia = $('#anchorDiaDate').value;
-  $('#anchorNoiteDate').value = dia ? addDays(dia, 1) : '';
+  $('#anchorNoiteDateDisplay').textContent = dia ? formatDateBRFull(addDays(dia, 1)) : '—';
 }
 
 async function saveConfig() {
   const anchorDate = $('#anchorDiaDate').value || null;
-  const cycleLength = parseInt($('#cycleLength').value, 10);
-  if (!cycleLength || cycleLength < 2) return alert('Duração do ciclo inválida.');
+  if (!anchorDate) return alert('Informe a data do Plantão de DIA.');
+  const folgaDays = parseInt($('#folgaDays').value, 10);
+  if (!folgaDays || folgaDays < 1) return alert('Informe os dias de folga (mínimo 1).');
+  const cycleLength = folgaDays + 2;
   const updated = await api('/api/config', 'PUT', { anchorDate, cycleLength });
   state.config = updated;
   closeModals();

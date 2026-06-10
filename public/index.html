@@ -142,19 +142,20 @@
             <h3>Configurar Escala</h3>
             <button class="btn-close" onclick="closeModals()">&times;</button>
         </div>
+        <p class="confirm-message">Informe uma data de cada turno conhecido. A partir daí o app monta a escala dia após dia, para sempre, até você alterar esta configuração.</p>
         <div class="form-group">
             <label>Data de um Plantão de DIA (06h - 18h)</label>
             <input type="date" id="anchorDiaDate" class="form-control" onchange="syncNoiteDate()">
         </div>
         <div class="form-group">
-            <label>Data do Plantão de NOITE seguinte (18h - 06h)</label>
-            <input type="date" id="anchorNoiteDate" class="form-control" disabled>
-            <small class="hint">Preenchido automaticamente (dia seguinte ao Plantão DIA).</small>
+            <label>Plantão de NOITE seguinte (18h - 06h)</label>
+            <p class="form-control form-control-static" id="anchorNoiteDateDisplay">—</p>
+            <small class="hint">Calculado automaticamente: dia seguinte ao Plantão DIA.</small>
         </div>
         <div class="form-group">
-            <label>Duração total do ciclo (dias)</label>
-            <input type="number" id="cycleLength" class="form-control" min="2" step="1" value="9">
-            <small class="hint">Ex: 1 dia + 1 noite + 7 folgas = 9. Ajuste se sua escala mudar.</small>
+            <label>Dias de folga após o Plantão de Noite</label>
+            <input type="number" id="folgaDays" class="form-control" min="1" step="1" value="7">
+            <small class="hint">Depois da última folga, a escala recomeça com Plantão DIA — e o ciclo se repete para sempre.</small>
         </div>
         <button class="btn-submit" onclick="saveConfig()">Salvar Escala</button>
         <button class="btn-secondary" onclick="logout()">Sair</button>
@@ -184,11 +185,11 @@
             <div class="form-row">
                 <div class="form-group" style="flex:1;">
                     <label>Hora Início</label>
-                    <input type="time" id="specialStart" class="form-control" value="18:00">
+                    <input type="time" id="specialStart" class="form-control" value="18:00" oninput="specialTimeTouched = true">
                 </div>
                 <div class="form-group" style="flex:1;">
                     <label>Hora Fim</label>
-                    <input type="time" id="specialEnd" class="form-control" value="06:00">
+                    <input type="time" id="specialEnd" class="form-control" value="06:00" oninput="specialTimeTouched = true">
                 </div>
             </div>
             <button class="btn-secondary" id="btnDeleteSpecial" onclick="deleteSpecialFromModal()">Remover Especial deste dia</button>

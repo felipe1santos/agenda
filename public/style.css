@@ -199,6 +199,7 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 .form-control { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; background: var(--bg-color); color: var(--text-main); }
 .form-control:focus { outline: none; border-color: var(--primary); }
 .form-control:disabled { opacity: 0.6; }
+.form-control-static { opacity: 0.7; }
 .form-row { display: flex; gap: 10px; }
 .hint { display: block; margin-top: 5px; color: var(--text-muted); font-size: 12px; }
 .hint-special { color: var(--cor-especial); font-weight: bold; }
