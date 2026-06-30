@@ -221,7 +221,7 @@ function toggleViewMode() {
   viewMode = viewMode === 'list' ? 'grid' : 'list';
   localStorage.setItem('agendaViewMode', viewMode);
   applyViewMode();
-  renderCalendar();
+  renderCalendar(true);
 }
 
 function applyViewMode() {
@@ -242,7 +242,8 @@ function renderCalendar(scrollToToday) {
   $('#currentMonthYear').textContent = `${monthNames[month]} ${year}`;
   const today = new Date();
   $('#currentMonthYear').classList.toggle('month-current', year === today.getFullYear() && month === today.getMonth());
-  $('#todayBadge').textContent = `Hoje ${formatDateBR(todayISO())}`;
+  const t = new Date();
+  $('#todayBadge').textContent = `Hoje, ${t.getDate()} de ${monthNames[t.getMonth()]}`;
 
   const calendarEl = $('#calendar');
   calendarEl.innerHTML = '';
