@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -61,7 +61,49 @@ db.exec(`
     done INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS shopping_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS recurring_items (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    day_of_month INTEGER NOT NULL,
+    last_done_month TEXT,
+    notify INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
 `);
+
+// Remove CHECK fixo de shopping_items.category (permite categorias custom)
+{
+  const t = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='shopping_items'").get();
+  if (t && /CHECK\s*\(\s*category/i.test(t.sql)) {
+    db.exec(`
+      CREATE TABLE shopping_items_new (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        name TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO shopping_items_new SELECT id, category, name, done, created_at FROM shopping_items;
+      DROP TABLE shopping_items;
+      ALTER TABLE shopping_items_new RENAME TO shopping_items;
+    `);
+  }
+}
+
+// Seed categorias padrão (ids casam com dados antigos)
+if (!db.prepare('SELECT id FROM shopping_categories LIMIT 1').get()) {
+  const ts = new Date().toISOString();
+  db.prepare('INSERT INTO shopping_categories (id, name, position, created_at) VALUES (?, ?, ?, ?)').run('mercado', 'Mercado', 0, ts);
+  db.prepare('INSERT INTO shopping_categories (id, name, position, created_at) VALUES (?, ?, ?, ?)').run('avulso', 'Avulso', 1, ts);
+}
 
 if (!db.prepare('SELECT id FROM config WHERE id = 1').get()) {
   db.prepare('INSERT INTO config (id, anchor_date, cycle_length) VALUES (1, NULL, 9)').run();
@@ -160,12 +202,25 @@ app.get('/api/state', (req, res) => {
     return serializeProject(p, steps);
   });
 
-  const shopping = { mercado: [], avulso: [] };
+  const shoppingCategories = db.prepare('SELECT * FROM shopping_categories ORDER BY position ASC, created_at ASC').all()
+    .map((c) => ({ id: c.id, name: c.name }));
+
+  const shopping = {};
+  for (const c of shoppingCategories) shopping[c.id] = [];
   for (const row of db.prepare('SELECT * FROM shopping_items ORDER BY created_at ASC').all()) {
+    if (!shopping[row.category]) shopping[row.category] = [];
     shopping[row.category].push({ id: row.id, name: row.name, done: !!row.done });
   }
 
-  res.json({ config, specials, tasks, projects, shopping });
+  const recurring = db.prepare('SELECT * FROM recurring_items ORDER BY day_of_month ASC, created_at ASC').all().map((r) => ({
+    id: r.id,
+    title: r.title,
+    dayOfMonth: r.day_of_month,
+    lastDoneMonth: r.last_done_month,
+    notify: !!r.notify,
+  }));
+
+  res.json({ config, specials, tasks, projects, shopping, shoppingCategories, recurring });
 });
 
 // ---------- Config ----------
@@ -290,10 +345,39 @@ app.delete('/api/projects/:pid/steps/:sid', (req, res) => {
   res.json(getProjectWithSteps(req.params.pid));
 });
 
+// ---------- Shopping categorias ----------
+const slugify = (s) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'cat';
+
+app.post('/api/shopping-categories', (req, res) => {
+  const { name } = req.body || {};
+  if (!name || !name.trim()) return res.status(400).json({ error: 'name é obrigatório' });
+  let id = slugify(name.trim());
+  while (db.prepare('SELECT id FROM shopping_categories WHERE id = ?').get(id)) id += '-' + Math.floor(Math.random() * 1000);
+  const maxPos = db.prepare('SELECT MAX(position) AS m FROM shopping_categories').get().m;
+  const position = (maxPos == null ? -1 : maxPos) + 1;
+  db.prepare('INSERT INTO shopping_categories (id, name, position, created_at) VALUES (?, ?, ?, ?)').run(id, name.trim(), position, now());
+  res.status(201).json({ id, name: name.trim() });
+});
+
+app.put('/api/shopping-categories/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM shopping_categories WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'not_found' });
+  const { name } = req.body || {};
+  if (!name || !name.trim()) return res.status(400).json({ error: 'name é obrigatório' });
+  db.prepare('UPDATE shopping_categories SET name = ? WHERE id = ?').run(name.trim(), req.params.id);
+  res.json({ id: req.params.id, name: name.trim() });
+});
+
+app.delete('/api/shopping-categories/:id', (req, res) => {
+  db.prepare('DELETE FROM shopping_items WHERE category = ?').run(req.params.id);
+  db.prepare('DELETE FROM shopping_categories WHERE id = ?').run(req.params.id);
+  res.status(204).end();
+});
+
 // ---------- Shopping ----------
 app.post('/api/shopping', (req, res) => {
   const { category, name } = req.body || {};
-  if (!['mercado', 'avulso'].includes(category)) return res.status(400).json({ error: 'category inválida' });
+  if (!db.prepare('SELECT id FROM shopping_categories WHERE id = ?').get(category)) return res.status(400).json({ error: 'category inválida' });
   if (!name || !name.trim()) return res.status(400).json({ error: 'name é obrigatório' });
   const id = uuid();
   db.prepare('INSERT INTO shopping_items (id, category, name, done, created_at) VALUES (?, ?, ?, 0, ?)')

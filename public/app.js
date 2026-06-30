@@ -18,8 +18,9 @@ const ICON_LIST = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" s
 const TOKEN_KEY = 'agendaToken';
 
 // ===================== Estado ===================== //
-let state = { config: { anchorDate: null, cycleLength: 9 }, specials: {}, tasks: [], projects: [], shopping: { mercado: [], avulso: [] } };
+let state = { config: { anchorDate: null, cycleLength: 9 }, specials: {}, tasks: [], projects: [], shopping: {}, shoppingCategories: [], recurring: [] };
 let currentDate = new Date();
+let currentShoppingCat = null;
 let viewMode = localStorage.getItem('agendaViewMode') || 'list';
 let currentTab = 'calendar';
 let currentFormType = 'special';
@@ -173,6 +174,7 @@ function switchTab(tab) {
   if (TAB_TITLES[tab]) $('#tabTitle').textContent = TAB_TITLES[tab];
 
   $('#fabBtn').classList.toggle('hidden', tab === 'shopping');
+  if (tab === 'shopping') currentShoppingCat = null;
 
   renderActiveTab(tab === 'calendar');
 }
@@ -740,29 +742,105 @@ async function saveProject() {
 }
 
 // ===================== Compras ===================== //
-function renderShopping() {
-  renderShoppingList('shoppingMercado', state.shopping.mercado);
-  renderShoppingList('shoppingAvulso', state.shopping.avulso);
+function catName(id) {
+  const c = state.shoppingCategories.find((x) => x.id === id);
+  return c ? c.name : id;
 }
 
-function renderShoppingList(containerId, items) {
-  const el = $('#' + containerId);
-  if (!items.length) { el.innerHTML = '<div class="empty-state">Lista vazia.</div>'; return; }
-  el.innerHTML = items.map((it) => `
-    <div class="list-item ${it.done ? 'done' : ''}">
-      <button class="check-circle" onclick="toggleShoppingItem('${it.id}',${!it.done})">${it.done ? '✓' : ''}</button>
-      <div class="item-content"><div class="item-title">${escapeHtml(it.name)}</div></div>
-      <div class="item-actions"><button class="icon-btn" title="Excluir" onclick="deleteShoppingItem('${it.id}')">🗑</button></div>
+function renderShopping() {
+  const el = $('#shoppingView');
+  if (currentShoppingCat && !state.shoppingCategories.some((c) => c.id === currentShoppingCat)) {
+    currentShoppingCat = null;
+  }
+  if (currentShoppingCat == null) { renderShoppingFolders(el); return; }
+  renderShoppingCategory(el, currentShoppingCat);
+}
+
+function renderShoppingFolders(el) {
+  const folders = state.shoppingCategories.map((c) => {
+    const items = state.shopping[c.id] || [];
+    const pending = items.filter((i) => !i.done).length;
+    return `
+      <button class="folder-card" onclick="openShoppingCat('${c.id}')">
+        <span class="folder-icon">📁</span>
+        <span class="folder-name">${escapeHtml(c.name)}</span>
+        <span class="folder-count">${pending ? pending + ' pendente(s)' : 'vazia'}</span>
+      </button>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="folder-grid">${folders || '<div class="empty-state">Nenhuma categoria.</div>'}</div>
+    <button class="btn-submit" style="margin-top:16px" onclick="addShoppingCategory()">+ Nova categoria</button>
+  `;
+}
+
+function renderShoppingCategory(el, catId) {
+  const items = state.shopping[catId] || [];
+  const itemsHtml = items.length
+    ? items.map((it) => `
+        <div class="list-item ${it.done ? 'done' : ''}">
+          <button class="check-circle" onclick="toggleShoppingItem('${it.id}',${!it.done})">${it.done ? '✓' : ''}</button>
+          <div class="item-content"><div class="item-title">${escapeHtml(it.name)}</div></div>
+          <div class="item-actions"><button class="icon-btn" title="Excluir" onclick="deleteShoppingItem('${it.id}')">🗑</button></div>
+        </div>`).join('')
+    : '<div class="empty-state">Lista vazia.</div>';
+
+  el.innerHTML = `
+    <div class="shopping-header">
+      <button class="icon-btn" title="Voltar" onclick="backToFolders()">◀</button>
+      <h3 class="section-title" style="flex:1">${escapeHtml(catName(catId))}</h3>
+      <button class="icon-btn" title="Renomear" onclick="renameShoppingCategory('${catId}')">✏️</button>
+      <button class="icon-btn" title="Excluir categoria" onclick="deleteShoppingCategory('${catId}')">🗑</button>
     </div>
-  `).join('');
+    <div class="shopping-input-row">
+      <input type="text" id="shoppingItemInput" class="form-control" placeholder="Adicionar item..." onkeydown="if(event.key==='Enter') addShoppingItem('${catId}')">
+      <button class="btn-add" onclick="addShoppingItem('${catId}')">+</button>
+    </div>
+    <button class="link-btn" style="margin:4px 0 8px" onclick="clearShoppingDone('${catId}')">Limpar concluídos</button>
+    <div class="item-list">${itemsHtml}</div>
+  `;
+  $('#shoppingItemInput').focus();
+}
+
+function openShoppingCat(id) { currentShoppingCat = id; renderShopping(); }
+function backToFolders() { currentShoppingCat = null; renderShopping(); }
+
+async function addShoppingCategory() {
+  const name = window.prompt('Nome da nova categoria:');
+  if (!name || !name.trim()) return;
+  const created = await api('/api/shopping-categories', 'POST', { name: name.trim() });
+  state.shoppingCategories.push(created);
+  state.shopping[created.id] = [];
+  renderShopping();
+}
+
+async function renameShoppingCategory(id) {
+  const name = window.prompt('Novo nome da categoria:', catName(id));
+  if (!name || !name.trim()) return;
+  const updated = await api(`/api/shopping-categories/${id}`, 'PUT', { name: name.trim() });
+  const c = state.shoppingCategories.find((x) => x.id === id);
+  if (c) c.name = updated.name;
+  renderShopping();
+}
+
+function deleteShoppingCategory(id) {
+  const count = (state.shopping[id] || []).length;
+  const msg = count ? `Excluir a categoria "${catName(id)}" e seus ${count} item(ns)?` : `Excluir a categoria "${catName(id)}"?`;
+  showConfirm(msg, async () => {
+    await api(`/api/shopping-categories/${id}`, 'DELETE');
+    state.shoppingCategories = state.shoppingCategories.filter((c) => c.id !== id);
+    delete state.shopping[id];
+    currentShoppingCat = null;
+    closeModals();
+    renderShopping();
+  });
 }
 
 async function addShoppingItem(category) {
-  const inputId = category === 'mercado' ? 'inputShoppingMercado' : 'inputShoppingAvulso';
-  const input = $('#' + inputId);
+  const input = $('#shoppingItemInput');
   const name = input.value.trim();
   if (!name) return;
   const created = await api('/api/shopping', 'POST', { category, name });
+  if (!state.shopping[category]) state.shopping[category] = [];
   state.shopping[category].push(created);
   input.value = '';
   renderShopping();
@@ -770,9 +848,9 @@ async function addShoppingItem(category) {
 
 async function toggleShoppingItem(id, done) {
   const updated = await api(`/api/shopping/${id}`, 'PUT', { done });
-  for (const cat of ['mercado', 'avulso']) {
+  for (const cat of Object.keys(state.shopping)) {
     const idx = state.shopping[cat].findIndex((i) => i.id === id);
-    if (idx >= 0) state.shopping[cat][idx] = updated;
+    if (idx >= 0) state.shopping[cat][idx] = { id: updated.id, name: updated.name, done: updated.done };
   }
   renderShopping();
 }
@@ -780,14 +858,14 @@ async function toggleShoppingItem(id, done) {
 function deleteShoppingItem(id) {
   showConfirm('Excluir este item?', async () => {
     await api(`/api/shopping/${id}`, 'DELETE');
-    for (const cat of ['mercado', 'avulso']) state.shopping[cat] = state.shopping[cat].filter((i) => i.id !== id);
+    for (const cat of Object.keys(state.shopping)) state.shopping[cat] = state.shopping[cat].filter((i) => i.id !== id);
     closeModals();
     renderShopping();
   });
 }
 
 function clearShoppingDone(category) {
-  const doneItems = state.shopping[category].filter((i) => i.done);
+  const doneItems = (state.shopping[category] || []).filter((i) => i.done);
   if (!doneItems.length) return;
   showConfirm(`Remover ${doneItems.length} item(ns) concluído(s)?`, async () => {
     for (const it of doneItems) await api(`/api/shopping/${it.id}`, 'DELETE');

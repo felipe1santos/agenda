@@ -91,27 +91,14 @@
 
         <!-- ---------- TAB: COMPRAS ---------- -->
         <section class="tab-panel hidden" id="panel-shopping">
+            <div id="shoppingView"></div>
+        </section>
+
+        <!-- ---------- TAB: RECORRENTES ---------- -->
+        <section class="tab-panel hidden" id="panel-recurring">
             <div class="list-section">
-                <div class="shopping-header">
-                    <h3 class="section-title">Mercado</h3>
-                    <button class="link-btn" onclick="clearShoppingDone('mercado')">Limpar concluídos</button>
-                </div>
-                <div class="shopping-input-row">
-                    <input type="text" id="inputShoppingMercado" class="form-control" placeholder="Adicionar item de mercado..." onkeydown="if(event.key==='Enter') addShoppingItem('mercado')">
-                    <button class="btn-add" onclick="addShoppingItem('mercado')">+</button>
-                </div>
-                <div id="shoppingMercado" class="item-list"></div>
-            </div>
-            <div class="list-section">
-                <div class="shopping-header">
-                    <h3 class="section-title">Avulsos (comprar um dia)</h3>
-                    <button class="link-btn" onclick="clearShoppingDone('avulso')">Limpar concluídos</button>
-                </div>
-                <div class="shopping-input-row">
-                    <input type="text" id="inputShoppingAvulso" class="form-control" placeholder="Adicionar item avulso..." onkeydown="if(event.key==='Enter') addShoppingItem('avulso')">
-                    <button class="btn-add" onclick="addShoppingItem('avulso')">+</button>
-                </div>
-                <div id="shoppingAvulso" class="item-list"></div>
+                <h3 class="section-title">Lembretes mensais</h3>
+                <div id="recurringList" class="item-list"></div>
             </div>
         </section>
 
