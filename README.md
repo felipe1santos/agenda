@@ -19,11 +19,11 @@ Acesse `http://localhost:3000`. Senha padrão: `agenda123` (defina
 
 No primeiro acesso, abra Configurações (ícone ⚙️) e informe:
 
-- **Data de um Plantão de DIA (06h-18h)** — qualquer data conhecida desse turno.
-- **Dias de folga após o Plantão de Noite** — padrão `7`.
+- **Data de um dia de TRABALHO (06h-22h)** — qualquer data conhecida de trabalho.
+- **Dias de folga após o trabalho** — padrão `2` (escala 1x2).
 
-O dia seguinte ao "Plantão DIA" vira automaticamente "Plantão NOITE"; depois
-vêm os dias de folga informados. Esse ciclo (Dia → Noite → Folgas) se repete
+Escala 1x2: 1 dia de trabalho (06h-22h) seguido de 2 dias de folga. Depois da
+última folga recomeça o trabalho. Esse ciclo (Trabalho → Folgas) se repete
 infinitamente, dia após dia, para sempre — até você alterar a configuração.
 
 ## Variáveis de ambiente

@@ -31,10 +31,14 @@
                 <button onclick="changeMonth(-1)">&#10094;</button>
                 <h2 id="currentMonthYear">Mês</h2>
                 <button onclick="changeMonth(1)">&#10095;</button>
+                <span class="today-badge" id="todayBadge"></span>
             </div>
             <h2 class="tab-title hidden" id="tabTitle">Tarefas</h2>
         </div>
         <div class="header-actions">
+            <button class="btn-icon" id="btnSpecialsList" onclick="openSpecialsListModal()" title="Dias Especiais">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
             <button class="btn-icon" id="btnViewToggle" onclick="toggleViewMode()" title="Mudar Visualização">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
             </button>
@@ -142,20 +146,15 @@
             <h3>Configurar Escala</h3>
             <button class="btn-close" onclick="closeModals()">&times;</button>
         </div>
-        <p class="confirm-message">Informe uma data de cada turno conhecido. A partir daí o app monta a escala dia após dia, para sempre, até você alterar esta configuração.</p>
+        <p class="confirm-message">Informe a data de um dia de trabalho conhecido. A partir daí o app monta a escala dia após dia, para sempre, até você alterar esta configuração.</p>
         <div class="form-group">
-            <label>Data de um Plantão de DIA (06h - 18h)</label>
-            <input type="date" id="anchorDiaDate" class="form-control" onchange="syncNoiteDate()">
+            <label>Data de um dia de TRABALHO (06h - 22h)</label>
+            <input type="date" id="anchorDiaDate" class="form-control">
         </div>
         <div class="form-group">
-            <label>Plantão de NOITE seguinte (18h - 06h)</label>
-            <p class="form-control form-control-static" id="anchorNoiteDateDisplay">—</p>
-            <small class="hint">Calculado automaticamente: dia seguinte ao Plantão DIA.</small>
-        </div>
-        <div class="form-group">
-            <label>Dias de folga após o Plantão de Noite</label>
-            <input type="number" id="folgaDays" class="form-control" min="1" step="1" value="7">
-            <small class="hint">Depois da última folga, a escala recomeça com Plantão DIA — e o ciclo se repete para sempre.</small>
+            <label>Dias de folga após o trabalho</label>
+            <input type="number" id="folgaDays" class="form-control" min="1" step="1" value="2">
+            <small class="hint">Escala 1x2: 1 dia de trabalho seguido de 2 dias de folga. Depois da última folga recomeça o trabalho — e o ciclo se repete para sempre.</small>
         </div>
         <button class="btn-submit" onclick="saveConfig()">Salvar Escala</button>
         <button class="btn-secondary" onclick="logout()">Sair</button>
@@ -178,7 +177,7 @@
         <div class="form-group">
             <label>Data</label>
             <input type="date" id="inputDate" class="form-control" onchange="checkEmendandoAutoFill()">
-            <small id="emendandoAviso" class="hint hint-special hidden">Dia de Plantão! Horário ajustado para Emendar (24h).</small>
+            <small id="emendandoAviso" class="hint hint-special hidden">Dia de trabalho! Horário ajustado para Emendar.</small>
         </div>
 
         <div id="formSpecial">
@@ -287,6 +286,17 @@
             <button class="btn-secondary" onclick="openAddRecordForDay('special')">Editar Especial</button>
             <button class="btn-secondary" onclick="openAddRecordForDay('task')">+ Nova Tarefa</button>
         </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: LISTA DE ESPECIAIS ===================== -->
+<div class="modal-overlay" id="specialsListModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Dias Especiais</h3>
+            <button class="btn-close" onclick="closeModals()">&times;</button>
+        </div>
+        <div id="specialsListBody" class="item-list"></div>
     </div>
 </div>
 

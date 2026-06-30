@@ -153,8 +153,7 @@ function getCycleIndex(dateString) {
 function getShiftInfo(dateString) {
   const idx = getCycleIndex(dateString);
   if (idx === -1) return { label: 'Sem Escala', class: 'shift-folga', type: 'folga', cycleIndex: -1 };
-  if (idx === 0) return { label: 'Plantão Dia (06h-18h)', class: 'shift-dia', type: 'dia', cycleIndex: idx };
-  if (idx === 1) return { label: 'Plantão Noite (18h-06h)', class: 'shift-noite', type: 'noite', cycleIndex: idx };
+  if (idx === 0) return { label: 'Trabalho (06h-22h)', class: 'shift-dia', type: 'trabalho', cycleIndex: idx };
   return { label: 'Folga', class: 'shift-folga', type: 'folga', cycleIndex: idx };
 }
 
@@ -170,21 +169,22 @@ function switchTab(tab) {
   $('#monthNav').classList.toggle('hidden', tab !== 'calendar');
   $('#tabTitle').classList.toggle('hidden', tab === 'calendar');
   $('#btnViewToggle').classList.toggle('hidden', tab !== 'calendar');
+  $('#btnSpecialsList').classList.toggle('hidden', tab !== 'calendar');
   if (TAB_TITLES[tab]) $('#tabTitle').textContent = TAB_TITLES[tab];
 
   $('#fabBtn').classList.toggle('hidden', tab === 'shopping');
 
-  renderActiveTab();
+  renderActiveTab(tab === 'calendar');
 }
 
-function renderActiveTab() {
-  if (currentTab === 'calendar') renderCalendar();
+function renderActiveTab(scrollToToday) {
+  if (currentTab === 'calendar') renderCalendar(scrollToToday);
   else if (currentTab === 'tasks') renderTasks();
   else if (currentTab === 'projects') renderProjects();
   else if (currentTab === 'shopping') renderShopping();
 }
 
-function renderAll() { renderActiveTab(); }
+function renderAll() { renderActiveTab(false); }
 
 function toggleCollapse(id) {
   $('#' + id).classList.toggle('collapsed');
@@ -236,12 +236,13 @@ function applyViewMode() {
   }
 }
 
-function renderCalendar() {
+function renderCalendar(scrollToToday) {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   $('#currentMonthYear').textContent = `${monthNames[month]} ${year}`;
   const today = new Date();
   $('#currentMonthYear').classList.toggle('month-current', year === today.getFullYear() && month === today.getMonth());
+  $('#todayBadge').textContent = `Hoje ${formatDateBR(todayISO())}`;
 
   const calendarEl = $('#calendar');
   calendarEl.innerHTML = '';
@@ -256,15 +257,23 @@ function renderCalendar() {
     if (nextMonth > 11) { nextMonth = 0; nextYear++; }
     calendarEl.appendChild(createDayCard(nextYear, nextMonth, i, true));
   }
+
+  if (scrollToToday) {
+    const todayCard = calendarEl.querySelector('.day-card.is-today');
+    if (todayCard) todayCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function shouldShowShiftBadge(dateStr, shift) {
+  return !(shift.type === 'folga' && state.specials[dateStr]);
 }
 
 function getDayTags(dateStr, shift) {
   const tags = [];
-  if (shift.type === 'dia') tags.push({ label: 'Plantão Dia', cls: 'day-tag-dia' });
-  else if (shift.type === 'noite') tags.push({ label: 'Plantão Noite', cls: 'day-tag-noite' });
+  if (shift.type === 'trabalho') tags.push({ label: 'Trabalho', cls: 'day-tag-dia' });
 
   if (state.specials[dateStr]) {
-    const isEmendando = shift.cycleIndex === 0 || shift.cycleIndex === 1;
+    const isEmendando = shift.cycleIndex === 0;
     tags.push({ label: isEmendando ? 'Especial 24h' : 'Especial', cls: 'day-tag-especial' });
   }
 
@@ -283,9 +292,10 @@ function createDayCard(year, month, day, isNextMonth) {
   const dateStr = formatDate(year, month, day);
   const dateObj = new Date(year, month, day);
   const shift = getShiftInfo(dateStr);
+  const isToday = dateStr === todayISO();
 
   const card = document.createElement('div');
-  card.className = `day-card ${isNextMonth ? 'next-month' : ''}`;
+  card.className = `day-card ${isNextMonth ? 'next-month' : ''} ${isToday ? 'is-today' : ''}`;
 
   if (viewMode === 'grid') {
     const tags = getDayTags(dateStr, shift);
@@ -312,7 +322,7 @@ function createDayCard(year, month, day, isNextMonth) {
         <span class="day-number">${pad(day)}</span>
         <span class="day-name">${dayNames[dateObj.getDay()]}</span>
       </div>
-      <span class="shift-badge ${shift.class}">${shift.label}</span>
+      ${shouldShowShiftBadge(dateStr, shift) ? `<span class="shift-badge ${shift.class}">${shift.label}</span>` : ''}
     </div>
   `;
   html += renderDayBody(dateStr, shift);
@@ -324,7 +334,7 @@ function renderDayBody(dateStr, shift) {
   let html = '';
   const sp = state.specials[dateStr];
   if (sp) {
-    const isEmendando = shift.cycleIndex === 0 || shift.cycleIndex === 1;
+    const isEmendando = shift.cycleIndex === 0;
     html += `<div class="special-alert" onclick="openAddRecordForDateDirect('${dateStr}')">ESPECIAL: ${sp.start} às ${sp.end}${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>`;
   }
 
@@ -360,7 +370,7 @@ function openDaySheet(dateStr) {
   const shift = getShiftInfo(dateStr);
   $('#daySheetTitle').textContent = `${dateObj.getDate()} de ${monthNames[dateObj.getMonth()]} - ${dayNames[dateObj.getDay()]}`;
 
-  let html = `<div class="day-header"><span class="shift-badge ${shift.class}">${shift.label}</span></div>`;
+  let html = shouldShowShiftBadge(dateStr, shift) ? `<div class="day-header"><span class="shift-badge ${shift.class}">${shift.label}</span></div>` : '';
   const body = renderDayBody(dateStr, shift);
   html += body || '<p class="confirm-message">Nada registrado neste dia.</p>';
 
@@ -393,15 +403,14 @@ function checkEmendandoAutoFill() {
   if (!dateStr || !state.config.anchorDate) { aviso.classList.add('hidden'); return; }
 
   const idx = getCycleIndex(dateStr);
-  const isEmendando = (idx === 0 || idx === 1) && currentFormType === 'special';
+  const isEmendando = idx === 0 && currentFormType === 'special';
   aviso.classList.toggle('hidden', !isEmendando);
 
   if (currentFormType !== 'special') return;
   if (state.specials[dateStr]) return;
   if (specialTimeTouched) return;
 
-  if (idx === 0) { $('#specialStart').value = '18:00'; $('#specialEnd').value = '06:00'; }
-  else if (idx === 1) { $('#specialStart').value = '06:00'; $('#specialEnd').value = '18:00'; }
+  if (idx === 0) { $('#specialStart').value = '22:00'; $('#specialEnd').value = '06:00'; }
 }
 
 function openAddRecordModal(dateStr, defaultType) {
@@ -463,6 +472,45 @@ async function deleteSpecialFromModal() {
   delete state.specials[dateStr];
   closeModals();
   renderAll();
+}
+
+// ===================== Lista de Especiais ===================== //
+function openSpecialsListModal() {
+  renderSpecialsList();
+  openModal('specialsListModal');
+}
+
+function renderSpecialsList() {
+  const el = $('#specialsListBody');
+  const dates = Object.keys(state.specials).sort();
+  if (!dates.length) { el.innerHTML = '<div class="empty-state">Nenhum dia especial cadastrado.</div>'; return; }
+
+  el.innerHTML = dates.map((dateStr) => {
+    const sp = state.specials[dateStr];
+    const shift = getShiftInfo(dateStr);
+    const isEmendando = shift.cycleIndex === 0;
+    const dateObj = new Date(dateStr + 'T00:00:00');
+    return `
+      <div class="list-item">
+        <div class="item-content">
+          <div class="item-title">${formatDateBRFull(dateStr)} - ${dayNames[dateObj.getDay()]}</div>
+          <div class="item-meta"><span>${sp.start} às ${sp.end}</span>${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>
+        </div>
+        <div class="item-actions">
+          <button class="icon-btn" title="Excluir" onclick="confirmDeleteSpecial('${dateStr}')">🗑</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function confirmDeleteSpecial(dateStr) {
+  showConfirm(`Excluir o dia especial de ${formatDateBRFull(dateStr)}?`, async () => {
+    await api(`/api/specials/${dateStr}`, 'DELETE');
+    delete state.specials[dateStr];
+    closeModals();
+    renderAll();
+  });
 }
 
 // ===================== Tarefas ===================== //
@@ -751,23 +799,17 @@ function clearShoppingDone(category) {
 // ===================== Configurações ===================== //
 function openConfigModal() {
   $('#anchorDiaDate').value = state.config.anchorDate || '';
-  const folgaDays = (state.config.cycleLength || 9) - 2;
-  $('#folgaDays').value = folgaDays >= 1 ? folgaDays : 7;
-  syncNoiteDate();
+  const folgaDays = (state.config.cycleLength || 3) - 1;
+  $('#folgaDays').value = folgaDays >= 1 ? folgaDays : 2;
   openModal('configModal');
-}
-
-function syncNoiteDate() {
-  const dia = $('#anchorDiaDate').value;
-  $('#anchorNoiteDateDisplay').textContent = dia ? formatDateBRFull(addDays(dia, 1)) : '—';
 }
 
 async function saveConfig() {
   const anchorDate = $('#anchorDiaDate').value || null;
-  if (!anchorDate) return alert('Informe a data do Plantão de DIA.');
+  if (!anchorDate) return alert('Informe a data de um dia de TRABALHO.');
   const folgaDays = parseInt($('#folgaDays').value, 10);
   if (!folgaDays || folgaDays < 1) return alert('Informe os dias de folga (mínimo 1).');
-  const cycleLength = folgaDays + 2;
+  const cycleLength = folgaDays + 1;
   const updated = await api('/api/config', 'PUT', { anchorDate, cycleLength });
   state.config = updated;
   closeModals();
