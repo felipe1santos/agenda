@@ -400,6 +400,46 @@ app.delete('/api/shopping/:id', (req, res) => {
   res.status(204).end();
 });
 
+// ---------- Recorrentes ----------
+const serializeRecurring = (r) => ({ id: r.id, title: r.title, dayOfMonth: r.day_of_month, lastDoneMonth: r.last_done_month, notify: !!r.notify });
+
+function clampDay(d) {
+  const n = parseInt(d, 10);
+  if (!Number.isInteger(n)) return null;
+  return Math.min(Math.max(n, 1), 31);
+}
+
+app.post('/api/recurring', (req, res) => {
+  const { title, dayOfMonth, notify } = req.body || {};
+  if (!title || !title.trim()) return res.status(400).json({ error: 'title é obrigatório' });
+  const day = clampDay(dayOfMonth);
+  if (day == null) return res.status(400).json({ error: 'dayOfMonth inválido' });
+  const id = uuid();
+  db.prepare('INSERT INTO recurring_items (id, title, day_of_month, last_done_month, notify, created_at) VALUES (?, ?, ?, NULL, ?, ?)')
+    .run(id, title.trim(), day, toBool(notify), now());
+  res.status(201).json(serializeRecurring(db.prepare('SELECT * FROM recurring_items WHERE id = ?').get(id)));
+});
+
+app.put('/api/recurring/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM recurring_items WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'not_found' });
+  const body = req.body || {};
+  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+  const title = has('title') ? String(body.title).trim() : existing.title;
+  const day = has('dayOfMonth') ? clampDay(body.dayOfMonth) : existing.day_of_month;
+  if (day == null) return res.status(400).json({ error: 'dayOfMonth inválido' });
+  const notify = has('notify') ? toBool(body.notify) : existing.notify;
+  const lastDoneMonth = has('lastDoneMonth') ? body.lastDoneMonth : existing.last_done_month;
+  db.prepare('UPDATE recurring_items SET title = ?, day_of_month = ?, last_done_month = ?, notify = ? WHERE id = ?')
+    .run(title, day, lastDoneMonth, notify, req.params.id);
+  res.json(serializeRecurring(db.prepare('SELECT * FROM recurring_items WHERE id = ?').get(req.params.id)));
+});
+
+app.delete('/api/recurring/:id', (req, res) => {
+  db.prepare('DELETE FROM recurring_items WHERE id = ?').run(req.params.id);
+  res.status(204).end();
+});
+
 // ---------- Static frontend ----------
 const PUBLIC_DIR = path.join(__dirname, 'public');
 app.use(express.static(PUBLIC_DIR));

@@ -159,8 +159,8 @@ function getShiftInfo(dateString) {
 }
 
 // ===================== Tabs ===================== //
-const TABS = ['calendar', 'tasks', 'projects', 'shopping'];
-const TAB_TITLES = { tasks: 'Tarefas', projects: 'Projetos', shopping: 'Lista' };
+const TABS = ['calendar', 'tasks', 'projects', 'shopping', 'recurring'];
+const TAB_TITLES = { tasks: 'Tarefas', projects: 'Projetos', shopping: 'Lista', recurring: 'Recorrentes' };
 
 function switchTab(tab) {
   currentTab = tab;
@@ -184,6 +184,7 @@ function renderActiveTab(scrollToToday) {
   else if (currentTab === 'tasks') renderTasks();
   else if (currentTab === 'projects') renderProjects();
   else if (currentTab === 'shopping') renderShopping();
+  else if (currentTab === 'recurring') renderRecurring();
 }
 
 function renderAll() { renderActiveTab(false); }
@@ -198,6 +199,7 @@ function onFabClick() {
   if (currentTab === 'calendar') openAddRecordModal(todayISO(), 'special');
   else if (currentTab === 'tasks') openTaskModal(null, null);
   else if (currentTab === 'projects') openModal('projectModal');
+  else if (currentTab === 'recurring') openRecurringModal(null);
 }
 
 // ===================== Modais ===================== //
@@ -280,6 +282,12 @@ function getDayTags(dateStr, shift) {
     tags.push({ label: isEmendando ? 'Especial 24h' : 'Especial', cls: 'day-tag-especial' });
   }
 
+  const mk = monthKeyOf(dateStr);
+  recurringForDate(dateStr).forEach((r) => {
+    const pending = r.lastDoneMonth !== mk;
+    tags.push({ label: '🔁 ' + r.title, cls: pending ? 'day-tag-recurring-pending' : 'day-tag-recurring-done' });
+  });
+
   state.tasks
     .filter((t) => t.date === dateStr && !t.done)
     .sort((a, b) => (b.priority || 0) - (a.priority || 0))
@@ -333,6 +341,14 @@ function createDayCard(year, month, day, isNextMonth) {
   return card;
 }
 
+function monthKeyOf(dateStr) { const [y, m] = dateStr.split('-'); return `${y}-${m}`; }
+
+function recurringForDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  return state.recurring.filter((r) => Math.min(r.dayOfMonth, daysInMonth) === d);
+}
+
 function renderDayBody(dateStr, shift) {
   let html = '';
   const sp = state.specials[dateStr];
@@ -340,6 +356,12 @@ function renderDayBody(dateStr, shift) {
     const isEmendando = shift.cycleIndex === 0;
     html += `<div class="special-alert" onclick="openAddRecordForDateDirect('${dateStr}')">ESPECIAL: ${sp.start} às ${sp.end}${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>`;
   }
+
+  const mk = monthKeyOf(dateStr);
+  recurringForDate(dateStr).forEach((r) => {
+    const pending = r.lastDoneMonth !== mk;
+    html += `<div class="recurring-alert ${pending ? 'pending' : 'done'}" onclick="event.stopPropagation(); toggleRecurringMonth('${r.id}','${mk}')">🔁 ${escapeHtml(r.title)} ${pending ? '<span class="recurring-hint">toque p/ confirmar</span>' : '✓ feito'}</div>`;
+  });
 
   const dayTasks = state.tasks.filter((t) => t.date === dateStr);
   if (dayTasks.length) {
@@ -875,6 +897,79 @@ function clearShoppingDone(category) {
   });
 }
 
+// ===================== Recorrentes ===================== //
+function currentMonthKey() { const t = new Date(); return `${t.getFullYear()}-${pad(t.getMonth() + 1)}`; }
+
+function renderRecurring() {
+  const el = $('#recurringList');
+  if (!state.recurring.length) { el.innerHTML = '<div class="empty-state">Nenhum lembrete mensal. Toque em + para criar.</div>'; return; }
+  const mk = currentMonthKey();
+  el.innerHTML = state.recurring.map((r) => {
+    const pending = r.lastDoneMonth !== mk;
+    return `
+      <div class="list-item ${pending ? '' : 'done'}">
+        <button class="check-circle" onclick="toggleRecurringMonth('${r.id}','${mk}')">${pending ? '' : '✓'}</button>
+        <div class="item-content">
+          <div class="item-title">🔁 ${escapeHtml(r.title)}</div>
+          <div class="item-meta"><span>Todo dia ${r.dayOfMonth}</span><span>${pending ? 'pendente este mês' : 'feito este mês'}</span></div>
+        </div>
+        <div class="item-actions">
+          <button class="icon-btn" title="Editar" onclick="openRecurringModal('${r.id}')">✏️</button>
+          <button class="icon-btn" title="Excluir" onclick="confirmDeleteRecurring('${r.id}')">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function toggleRecurringMonth(id, mk) {
+  const r = state.recurring.find((x) => x.id === id);
+  if (!r) return;
+  const newVal = r.lastDoneMonth === mk ? null : mk;
+  const updated = await api(`/api/recurring/${id}`, 'PUT', { lastDoneMonth: newVal });
+  Object.assign(r, updated);
+  renderAll();
+  if ($('#daySheetModal').classList.contains('active') && currentSheetDate) openDaySheet(currentSheetDate);
+}
+
+function openRecurringModal(id) {
+  const r = id ? state.recurring.find((x) => x.id === id) : null;
+  $('#recurringModalTitle').textContent = r ? 'Editar Recorrente' : 'Novo Recorrente';
+  $('#recurringModalId').value = r ? r.id : '';
+  $('#recurringTitleInput').value = r ? r.title : '';
+  $('#recurringDayInput').value = r ? r.dayOfMonth : '';
+  $('#recurringNotify').checked = r ? !!r.notify : false;
+  openModal('recurringModal');
+}
+
+async function saveRecurringModal() {
+  const id = $('#recurringModalId').value;
+  const title = $('#recurringTitleInput').value.trim();
+  if (!title) return alert('Dê um título ao lembrete.');
+  const dayOfMonth = parseInt($('#recurringDayInput').value, 10);
+  if (!dayOfMonth || dayOfMonth < 1 || dayOfMonth > 31) return alert('Informe o dia do mês (1 a 31).');
+  const notify = $('#recurringNotify').checked;
+  if (id) {
+    const updated = await api(`/api/recurring/${id}`, 'PUT', { title, dayOfMonth, notify });
+    const idx = state.recurring.findIndex((x) => x.id === id);
+    state.recurring[idx] = updated;
+  } else {
+    const created = await api('/api/recurring', 'POST', { title, dayOfMonth, notify });
+    state.recurring.push(created);
+  }
+  closeModals();
+  renderAll();
+}
+
+function confirmDeleteRecurring(id) {
+  const r = state.recurring.find((x) => x.id === id);
+  showConfirm(`Excluir o recorrente "${r.title}"?`, async () => {
+    await api(`/api/recurring/${id}`, 'DELETE');
+    state.recurring = state.recurring.filter((x) => x.id !== id);
+    closeModals();
+    renderAll();
+  });
+}
+
 // ===================== Configurações ===================== //
 function openConfigModal() {
   $('#anchorDiaDate').value = state.config.anchorDate || '';
@@ -942,6 +1037,14 @@ async function checkDueNotifications() {
   if (sp && sp.notify && !notified.includes('special:' + today)) {
     await showAppNotification('Especial hoje', `${sp.start} às ${sp.end}`);
     newlyNotified.push('special:' + today);
+  }
+
+  const mk = monthKeyOf(today);
+  for (const r of recurringForDate(today)) {
+    if (r.notify && r.lastDoneMonth !== mk && !notified.includes('recurring:' + r.id)) {
+      await showAppNotification('Lembrete mensal', r.title);
+      newlyNotified.push('recurring:' + r.id);
+    }
   }
 
   if (newlyNotified.length) saveNotifiedToday([...notified, ...newlyNotified]);

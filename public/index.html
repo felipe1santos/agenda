@@ -123,6 +123,10 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
             <span>Lista</span>
         </button>
+        <button class="nav-btn" data-tab="recurring" onclick="switchTab('recurring')">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Recorrentes</span>
+        </button>
     </nav>
 </div>
 
@@ -243,6 +247,29 @@
         </div>
         <label class="checkbox-row"><input type="checkbox" id="taskModalNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
         <button class="btn-submit" onclick="saveTaskModal()">Salvar</button>
+    </div>
+</div>
+
+<!-- ===================== MODAL: RECORRENTE (criar/editar) ===================== -->
+<div class="modal-overlay" id="recurringModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="recurringModalTitle">Novo Recorrente</h3>
+            <button class="btn-close" onclick="closeModals()">&times;</button>
+        </div>
+        <p class="confirm-message">Lembrete que se repete todo mês. Fica piscando vermelho no calendário no dia escolhido até você confirmar; no mês seguinte volta sozinho.</p>
+        <input type="hidden" id="recurringModalId">
+        <div class="form-group">
+            <label>Título</label>
+            <input type="text" id="recurringTitleInput" class="form-control" placeholder="Ex: Pagar aluguel, Água, Luz">
+        </div>
+        <div class="form-group">
+            <label>Dia do mês</label>
+            <input type="number" id="recurringDayInput" class="form-control" min="1" max="31" step="1" placeholder="1 a 31">
+            <small class="hint">Em meses curtos (ex: dia 31 em fevereiro) cai no último dia do mês.</small>
+        </div>
+        <label class="checkbox-row"><input type="checkbox" id="recurringNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
+        <button class="btn-submit" onclick="saveRecurringModal()">Salvar</button>
     </div>
 </div>
 
