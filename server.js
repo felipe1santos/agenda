@@ -77,6 +77,11 @@ db.exec(`
     notify INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS abonos (
+    date TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL
+  );
 `);
 
 // Remove CHECK fixo de shopping_items.category (permite categorias custom)
@@ -114,6 +119,7 @@ for (const stmt of [
   'ALTER TABLE tasks ADD COLUMN notify INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE specials ADD COLUMN notify INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE project_steps ADD COLUMN obs TEXT',
+  'ALTER TABLE tasks ADD COLUMN end_date TEXT',
 ]) {
   try { db.exec(stmt); } catch (e) { /* coluna já existe */ }
 }
@@ -190,11 +196,15 @@ app.get('/api/state', (req, res) => {
     id: t.id,
     title: t.title,
     date: t.date,
+    endDate: t.end_date,
     priority: t.priority,
     obs: t.obs,
     done: !!t.done,
     notify: !!t.notify,
   }));
+
+  const abonos = {};
+  for (const row of db.prepare('SELECT * FROM abonos').all()) abonos[row.date] = true;
 
   const projectRows = db.prepare('SELECT * FROM projects ORDER BY created_at ASC').all();
   const projects = projectRows.map((p) => {
@@ -220,7 +230,7 @@ app.get('/api/state', (req, res) => {
     notify: !!r.notify,
   }));
 
-  res.json({ config, specials, tasks, projects, shopping, shoppingCategories, recurring });
+  res.json({ config, specials, tasks, projects, shopping, shoppingCategories, recurring, abonos });
 });
 
 // ---------- Config ----------
@@ -256,14 +266,15 @@ app.delete('/api/specials/:date', (req, res) => {
 
 // ---------- Tasks ----------
 app.post('/api/tasks', (req, res) => {
-  const { title, date, priority, obs, notify } = req.body || {};
+  const { title, date, endDate, priority, obs, notify } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: 'title é obrigatório' });
+  const end = date && endDate && /^\d{4}-\d{2}-\d{2}$/.test(endDate) && endDate > date ? endDate : null;
   const id = uuid();
   db.prepare(`
-    INSERT INTO tasks (id, title, date, priority, obs, done, created_at, notify)
-    VALUES (?, ?, ?, ?, ?, 0, ?, ?)
-  `).run(id, title.trim(), date || null, priority ?? null, obs || null, now(), toBool(notify));
-  res.status(201).json({ id, title: title.trim(), date: date || null, priority: priority ?? null, obs: obs || null, done: false, notify: !!notify });
+    INSERT INTO tasks (id, title, date, end_date, priority, obs, done, created_at, notify)
+    VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+  `).run(id, title.trim(), date || null, end, priority ?? null, obs || null, now(), toBool(notify));
+  res.status(201).json({ id, title: title.trim(), date: date || null, endDate: end, priority: priority ?? null, obs: obs || null, done: false, notify: !!notify });
 });
 
 app.put('/api/tasks/:id', (req, res) => {
@@ -272,15 +283,17 @@ app.put('/api/tasks/:id', (req, res) => {
   const body = req.body || {};
   const title = Object.prototype.hasOwnProperty.call(body, 'title') ? body.title : existing.title;
   const date = Object.prototype.hasOwnProperty.call(body, 'date') ? body.date : existing.date;
+  const rawEnd = Object.prototype.hasOwnProperty.call(body, 'endDate') ? body.endDate : existing.end_date;
+  const endDate = date && rawEnd && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) && rawEnd > date ? rawEnd : null;
   const priority = Object.prototype.hasOwnProperty.call(body, 'priority') ? body.priority : existing.priority;
   const obs = Object.prototype.hasOwnProperty.call(body, 'obs') ? body.obs : existing.obs;
   const done = Object.prototype.hasOwnProperty.call(body, 'done') ? toBool(body.done) : existing.done;
   const notify = Object.prototype.hasOwnProperty.call(body, 'notify') ? toBool(body.notify) : existing.notify;
 
-  db.prepare('UPDATE tasks SET title = ?, date = ?, priority = ?, obs = ?, done = ?, notify = ? WHERE id = ?')
-    .run(title, date, priority, obs, done, notify, req.params.id);
+  db.prepare('UPDATE tasks SET title = ?, date = ?, end_date = ?, priority = ?, obs = ?, done = ?, notify = ? WHERE id = ?')
+    .run(title, date, endDate, priority, obs, done, notify, req.params.id);
 
-  res.json({ id: req.params.id, title, date, priority, obs, done: !!done, notify: !!notify });
+  res.json({ id: req.params.id, title, date, endDate, priority, obs, done: !!done, notify: !!notify });
 });
 
 app.delete('/api/tasks/:id', (req, res) => {
@@ -397,6 +410,19 @@ app.put('/api/shopping/:id', (req, res) => {
 
 app.delete('/api/shopping/:id', (req, res) => {
   db.prepare('DELETE FROM shopping_items WHERE id = ?').run(req.params.id);
+  res.status(204).end();
+});
+
+// ---------- Abonos ----------
+app.put('/api/abonos/:date', (req, res) => {
+  const { date } = req.params;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'data inválida' });
+  db.prepare('INSERT INTO abonos (date, created_at) VALUES (?, ?) ON CONFLICT(date) DO NOTHING').run(date, now());
+  res.json({ date });
+});
+
+app.delete('/api/abonos/:date', (req, res) => {
+  db.prepare('DELETE FROM abonos WHERE date = ?').run(req.params.date);
   res.status(204).end();
 });
 

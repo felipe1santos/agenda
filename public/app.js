@@ -18,7 +18,7 @@ const ICON_LIST = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" s
 const TOKEN_KEY = 'agendaToken';
 
 // ===================== Estado ===================== //
-let state = { config: { anchorDate: null, cycleLength: 9 }, specials: {}, tasks: [], projects: [], shopping: {}, shoppingCategories: [], recurring: [] };
+let state = { config: { anchorDate: null, cycleLength: 9 }, specials: {}, tasks: [], projects: [], shopping: {}, shoppingCategories: [], recurring: [], abonos: {} };
 let currentDate = new Date();
 let currentShoppingCat = null;
 let viewMode = localStorage.getItem('agendaViewMode') || 'list';
@@ -62,6 +62,12 @@ function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + n);
   return formatDate(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function taskOccursOn(t, dateStr) {
+  if (!t.date) return false;
+  const end = t.endDate && t.endDate > t.date ? t.endDate : t.date;
+  return dateStr >= t.date && dateStr <= end;
 }
 
 window.addEventListener('unhandledrejection', (e) => {
@@ -154,8 +160,30 @@ function getCycleIndex(dateString) {
 function getShiftInfo(dateString) {
   const idx = getCycleIndex(dateString);
   if (idx === -1) return { label: 'Sem Escala', class: 'shift-folga', type: 'folga', cycleIndex: -1 };
-  if (idx === 0) return { label: 'Trabalho (06h-22h)', class: 'shift-dia', type: 'trabalho', cycleIndex: idx };
+  if (idx === 0) {
+    if (state.abonos[dateString]) return { label: 'Folga (Abono)', class: 'shift-folga', type: 'folga', cycleIndex: idx, abono: true };
+    return { label: 'Trabalho (06h-22h)', class: 'shift-dia', type: 'trabalho', cycleIndex: idx };
+  }
   return { label: 'Folga', class: 'shift-folga', type: 'folga', cycleIndex: idx };
+}
+
+function isFolgaDay(dateStr) {
+  const s = getShiftInfo(dateStr);
+  return s.type === 'folga' && s.cycleIndex !== -1;
+}
+
+// Folga prolongada: sequência de folgas conectadas que contém pelo menos um abono
+function isExtendedFolga(dateStr) {
+  if (!isFolgaDay(dateStr)) return false;
+  let start = dateStr;
+  while (isFolgaDay(addDays(start, -1))) start = addDays(start, -1);
+  let d = start;
+  let hasAbono = false;
+  while (isFolgaDay(d)) {
+    if (state.abonos[d]) hasAbono = true;
+    d = addDays(d, 1);
+  }
+  return hasAbono;
 }
 
 // ===================== Tabs ===================== //
@@ -276,6 +304,7 @@ function shouldShowShiftBadge(dateStr, shift) {
 function getDayTags(dateStr, shift) {
   const tags = [];
   if (shift.type === 'trabalho') tags.push({ label: 'Trabalho', cls: 'day-tag-dia' });
+  if (shift.abono) tags.push({ label: 'Abono ✓', cls: 'day-tag-folga' });
 
   if (state.specials[dateStr]) {
     const isEmendando = shift.cycleIndex === 0;
@@ -289,7 +318,7 @@ function getDayTags(dateStr, shift) {
   });
 
   state.tasks
-    .filter((t) => t.date === dateStr && !t.done)
+    .filter((t) => taskOccursOn(t, dateStr) && !t.done)
     .sort((a, b) => (b.priority || 0) - (a.priority || 0))
     .forEach((t) => {
       const color = t.priority ? colorsMap[t.priority] : 'var(--text-muted)';
@@ -304,9 +333,10 @@ function createDayCard(year, month, day, isNextMonth) {
   const dateObj = new Date(year, month, day);
   const shift = getShiftInfo(dateStr);
   const isToday = dateStr === todayISO();
+  const extended = isExtendedFolga(dateStr);
 
   const card = document.createElement('div');
-  card.className = `day-card ${isNextMonth ? 'next-month' : ''} ${isToday ? 'is-today' : ''}`;
+  card.className = `day-card ${isNextMonth ? 'next-month' : ''} ${isToday ? 'is-today' : ''} ${extended ? 'folga-estendida' : ''}`;
 
   if (viewMode === 'grid') {
     const tags = getDayTags(dateStr, shift);
@@ -332,12 +362,14 @@ function createDayCard(year, month, day, isNextMonth) {
       <div class="day-info">
         <span class="day-number">${pad(day)}</span>
         <span class="day-name">${dayNames[dateObj.getDay()]}</span>
+        ${isToday ? '<span class="today-pill">HOJE</span>' : ''}
       </div>
       ${shouldShowShiftBadge(dateStr, shift) ? `<span class="shift-badge ${shift.class}">${shift.label}</span>` : ''}
     </div>
   `;
   html += renderDayBody(dateStr, shift);
   card.innerHTML = html;
+  card.onclick = () => openDaySheet(dateStr);
   return card;
 }
 
@@ -351,10 +383,13 @@ function recurringForDate(dateStr) {
 
 function renderDayBody(dateStr, shift) {
   let html = '';
+  if (shift.abono) {
+    html += `<div class="abono-alert" onclick="event.stopPropagation(); openAbonoForDate('${dateStr}')">ABONO — dia de folga</div>`;
+  }
   const sp = state.specials[dateStr];
   if (sp) {
     const isEmendando = shift.cycleIndex === 0;
-    html += `<div class="special-alert" onclick="openAddRecordForDateDirect('${dateStr}')">ESPECIAL: ${sp.start} às ${sp.end}${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>`;
+    html += `<div class="special-alert" onclick="event.stopPropagation(); openAddRecordForDateDirect('${dateStr}')">ESPECIAL: ${sp.start} às ${sp.end}${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>`;
   }
 
   const mk = monthKeyOf(dateStr);
@@ -363,11 +398,12 @@ function renderDayBody(dateStr, shift) {
     html += `<div class="recurring-alert ${pending ? 'pending' : 'done'}" onclick="event.stopPropagation(); toggleRecurringMonth('${r.id}','${mk}')">🔁 ${escapeHtml(r.title)} ${pending ? '<span class="recurring-hint">toque p/ confirmar</span>' : '✓ feito'}</div>`;
   });
 
-  const dayTasks = state.tasks.filter((t) => t.date === dateStr);
+  const dayTasks = state.tasks.filter((t) => taskOccursOn(t, dateStr));
   if (dayTasks.length) {
     html += '<div class="event-list">';
     dayTasks.forEach((t) => {
       const fire = fireBadge(t.priority);
+      const range = t.endDate && t.endDate !== t.date ? `<span class="event-obs">${formatDateBR(t.date)} até ${formatDateBR(t.endDate)}</span>` : '';
       const actions = t.done
         ? `<button onclick="event.stopPropagation(); reopenTask('${t.id}')">↩ Reabrir</button>`
         : `<button onclick="event.stopPropagation(); completeTask('${t.id}')">✓ Concluir</button>
@@ -378,6 +414,7 @@ function renderDayBody(dateStr, shift) {
           <div class="event-details">
             <span class="event-title">${escapeHtml(t.title)}</span>
             ${t.obs ? `<span class="event-obs">${escapeHtml(t.obs)}</span>` : ''}
+            ${range}
           </div>
           <div class="event-actions">${actions}</div>
         </div>
@@ -412,13 +449,19 @@ function openAddRecordForDateDirect(dateStr) {
   openAddRecordModal(dateStr, 'special');
 }
 
+function openAbonoForDate(dateStr) {
+  openAddRecordModal(dateStr, 'abono');
+}
+
 // ===================== Modal: Adicionar Registro ===================== //
 function switchFormType(type) {
   currentFormType = type;
   $('#btnTypeSpecial').classList.toggle('active', type === 'special');
   $('#btnTypeTask').classList.toggle('active', type === 'task');
+  $('#btnTypeAbono').classList.toggle('active', type === 'abono');
   $('#formSpecial').classList.toggle('hidden', type !== 'special');
   $('#formTask').classList.toggle('hidden', type !== 'task');
+  $('#formAbono').classList.toggle('hidden', type !== 'abono');
   checkEmendandoAutoFill();
 }
 
@@ -456,6 +499,8 @@ function openAddRecordModal(dateStr, defaultType) {
   }
 
   $('#taskNotify').checked = false;
+  $('#taskEndDate').value = '';
+  $('#btnDeleteAbono').classList.toggle('hidden', !state.abonos[dateStr]);
 
   checkEmendandoAutoFill();
   openModal('addRecordModal');
@@ -471,21 +516,37 @@ async function saveRecord() {
     const notify = $('#specialNotify').checked;
     const saved = await api(`/api/specials/${dateStr}`, 'PUT', { start, end, notify });
     state.specials[dateStr] = { start: saved.start, end: saved.end, notify: saved.notify };
+  } else if (currentFormType === 'abono') {
+    if (getCycleIndex(dateStr) !== 0) return alert('Abono só pode ser marcado em um dia de TRABALHO.');
+    await api(`/api/abonos/${dateStr}`, 'PUT');
+    state.abonos[dateStr] = true;
   } else {
     const title = $('#taskTitle').value.trim();
     if (!title) return alert('Dê um título à tarefa.');
+    const endDate = $('#taskEndDate').value || null;
+    if (endDate && endDate < dateStr) return alert('A data final deve ser igual ou depois da data inicial.');
     const priorityVal = $('#taskPriority').value;
     const priority = priorityVal ? parseInt(priorityVal, 10) : null;
     const obs = $('#taskObs').value.trim() || null;
     const notify = $('#taskNotify').checked;
-    const created = await api('/api/tasks', 'POST', { title, date: dateStr, priority, obs, notify });
+    const created = await api('/api/tasks', 'POST', { title, date: dateStr, endDate, priority, obs, notify });
     state.tasks.push(created);
     $('#taskTitle').value = '';
     $('#taskObs').value = '';
     $('#taskPriority').value = '';
     $('#taskNotify').checked = false;
+    $('#taskEndDate').value = '';
   }
 
+  closeModals();
+  renderAll();
+}
+
+async function deleteAbonoFromModal() {
+  const dateStr = $('#inputDate').value;
+  if (!dateStr || !state.abonos[dateStr]) return closeModals();
+  await api(`/api/abonos/${dateStr}`, 'DELETE');
+  delete state.abonos[dateStr];
   closeModals();
   renderAll();
 }
@@ -559,7 +620,7 @@ function taskListItemHtml(t, context) {
   const fire = fireBadge(t.priority);
 
   const metaParts = [];
-  if (t.date) metaParts.push(formatDateBR(t.date));
+  if (t.date) metaParts.push(formatDateBR(t.date) + (t.endDate && t.endDate !== t.date ? ' até ' + formatDateBR(t.endDate) : ''));
   if (t.obs) metaParts.push(escapeHtml(t.obs));
 
   let actions;
@@ -599,6 +660,7 @@ function openTaskModal(id, defaultDate) {
   $('#taskModalId').value = task ? task.id : '';
   $('#taskModalTitleInput').value = task ? task.title : '';
   $('#taskModalDate').value = task ? (task.date || '') : (defaultDate || '');
+  $('#taskModalEndDate').value = task ? (task.endDate || '') : '';
   $('#taskModalPriority').value = task && task.priority ? String(task.priority) : '';
   $('#taskModalObs').value = task ? (task.obs || '') : '';
   $('#taskModalNotify').checked = task ? !!task.notify : false;
@@ -610,17 +672,19 @@ async function saveTaskModal() {
   const title = $('#taskModalTitleInput').value.trim();
   if (!title) return alert('Dê um título à tarefa.');
   const date = $('#taskModalDate').value || null;
+  const endDate = $('#taskModalEndDate').value || null;
+  if (date && endDate && endDate < date) return alert('A data final deve ser igual ou depois da data inicial.');
   const priorityVal = $('#taskModalPriority').value;
   const priority = priorityVal ? parseInt(priorityVal, 10) : null;
   const obs = $('#taskModalObs').value.trim() || null;
   const notify = $('#taskModalNotify').checked;
 
   if (id) {
-    const updated = await api(`/api/tasks/${id}`, 'PUT', { title, date, priority, obs, notify });
+    const updated = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, priority, obs, notify });
     const idx = state.tasks.findIndex((t) => t.id === id);
     state.tasks[idx] = updated;
   } else {
-    const created = await api('/api/tasks', 'POST', { title, date, priority, obs, notify });
+    const created = await api('/api/tasks', 'POST', { title, date, endDate, priority, obs, notify });
     state.tasks.push(created);
   }
 
@@ -633,11 +697,12 @@ async function patchTask(id, fields) {
   const idx = state.tasks.findIndex((t) => t.id === id);
   state.tasks[idx] = updated;
   renderAll();
+  if ($('#daySheetModal').classList.contains('active') && currentSheetDate) openDaySheet(currentSheetDate);
 }
 
 function completeTask(id) { return patchTask(id, { done: true }); }
 function reopenTask(id) { return patchTask(id, { done: false }); }
-function sendToBacklog(id) { return patchTask(id, { date: null, done: false }); }
+function sendToBacklog(id) { return patchTask(id, { date: null, endDate: null, done: false }); }
 
 function confirmDeleteTask(id) {
   const task = state.tasks.find((t) => t.id === id);
@@ -1027,7 +1092,7 @@ async function checkDueNotifications() {
   const newlyNotified = [];
 
   for (const t of state.tasks) {
-    if (t.date === today && !t.done && t.notify && !notified.includes('task:' + t.id)) {
+    if (taskOccursOn(t, today) && !t.done && t.notify && !notified.includes('task:' + t.id)) {
       await showAppNotification('Tarefa de hoje', t.title);
       newlyNotified.push('task:' + t.id);
     }
@@ -1091,8 +1156,15 @@ async function onInstallClick() {
   registerServiceWorker();
   setupInstallPrompt();
 
+  let lastSeenDay = todayISO();
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && getToken()) checkDueNotifications();
+    if (document.hidden || !getToken()) return;
+    checkDueNotifications();
+    if (todayISO() !== lastSeenDay) {
+      lastSeenDay = todayISO();
+      currentDate = new Date();
+      if (currentTab === 'calendar') renderCalendar(true);
+    }
   });
   setInterval(() => { if (getToken()) checkDueNotifications(); }, 5 * 60 * 1000);
 })();

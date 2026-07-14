@@ -163,6 +163,7 @@
         <div class="type-selector">
             <button class="type-btn active" id="btnTypeSpecial" onclick="switchFormType('special')">Especial</button>
             <button class="type-btn" id="btnTypeTask" onclick="switchFormType('task')">Tarefa</button>
+            <button class="type-btn" id="btnTypeAbono" onclick="switchFormType('abono')">Abono</button>
         </div>
 
         <div class="form-group">
@@ -203,10 +204,20 @@
                 </select>
             </div>
             <div class="form-group">
+                <label>Repetir até (opcional)</label>
+                <input type="date" id="taskEndDate" class="form-control">
+                <small class="hint">A tarefa aparece em todos os dias entre a data e esta data final.</small>
+            </div>
+            <div class="form-group">
                 <label>Observação</label>
                 <input type="text" id="taskObs" class="form-control" placeholder="Detalhes adicionais...">
             </div>
             <label class="checkbox-row"><input type="checkbox" id="taskNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
+        </div>
+
+        <div id="formAbono" class="hidden">
+            <p class="confirm-message">Abono transforma um dia de <strong>trabalho</strong> em folga. Todos os dias de folga em sequência (antes e depois) acendem em <strong style="color:#10b981">verde</strong> como folga prolongada.</p>
+            <button class="btn-secondary" id="btnDeleteAbono" onclick="deleteAbonoFromModal()">Remover Abono deste dia</button>
         </div>
 
         <button class="btn-submit" onclick="saveRecord()">Salvar</button>
@@ -229,6 +240,11 @@
             <label>Data (opcional)</label>
             <input type="date" id="taskModalDate" class="form-control">
             <small class="hint">Sem data = fica na Lista de Afazeres.</small>
+        </div>
+        <div class="form-group">
+            <label>Repetir até (opcional)</label>
+            <input type="date" id="taskModalEndDate" class="form-control">
+            <small class="hint">A tarefa aparece em todos os dias entre a data e esta data final.</small>
         </div>
         <div class="form-group">
             <label>Prioridade</label>
