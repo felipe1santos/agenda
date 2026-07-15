@@ -140,7 +140,7 @@
         <p class="confirm-message">Informe a data de um dia de trabalho conhecido. A partir daí o app monta a escala dia após dia, para sempre, até você alterar esta configuração.</p>
         <div class="form-group">
             <label>Data de um dia de TRABALHO (06h - 22h)</label>
-            <input type="date" id="anchorDiaDate" class="form-control">
+            <input type="text" id="anchorDiaDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
         </div>
         <div class="form-group">
             <label>Dias de folga após o trabalho</label>
@@ -168,19 +168,19 @@
 
         <div class="form-group">
             <label>Data</label>
-            <input type="date" id="inputDate" class="form-control" onchange="checkEmendandoAutoFill()">
+            <input type="text" id="inputDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this); checkEmendandoAutoFill()">
             <small id="emendandoAviso" class="hint hint-special hidden">Dia de trabalho! Horário ajustado para Emendar.</small>
         </div>
 
         <div id="formSpecial">
             <div class="form-row">
                 <div class="form-group" style="flex:1;">
-                    <label>Hora Início</label>
-                    <input type="time" id="specialStart" class="form-control" value="18:00" oninput="specialTimeTouched = true">
+                    <label>Hora Início (24h)</label>
+                    <input type="text" id="specialStart" class="form-control" value="18:00" placeholder="HH:MM" inputmode="numeric" maxlength="5" oninput="specialTimeTouched = true; maskTime24(this)">
                 </div>
                 <div class="form-group" style="flex:1;">
-                    <label>Hora Fim</label>
-                    <input type="time" id="specialEnd" class="form-control" value="06:00" oninput="specialTimeTouched = true">
+                    <label>Hora Fim (24h)</label>
+                    <input type="text" id="specialEnd" class="form-control" value="06:00" placeholder="HH:MM" inputmode="numeric" maxlength="5" oninput="specialTimeTouched = true; maskTime24(this)">
                 </div>
             </div>
             <label class="checkbox-row"><input type="checkbox" id="specialNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
@@ -205,7 +205,7 @@
             </div>
             <div class="form-group">
                 <label>Repetir até (opcional)</label>
-                <input type="date" id="taskEndDate" class="form-control">
+                <input type="text" id="taskEndDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
                 <small class="hint">A tarefa aparece em todos os dias entre a data e esta data final.</small>
             </div>
             <div class="form-group">
@@ -238,12 +238,12 @@
         </div>
         <div class="form-group">
             <label>Data (opcional)</label>
-            <input type="date" id="taskModalDate" class="form-control">
+            <input type="text" id="taskModalDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
             <small class="hint">Sem data = fica na Lista de Afazeres.</small>
         </div>
         <div class="form-group">
             <label>Repetir até (opcional)</label>
-            <input type="date" id="taskModalEndDate" class="form-control">
+            <input type="text" id="taskModalEndDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
             <small class="hint">A tarefa aparece em todos os dias entre a data e esta data final.</small>
         </div>
         <div class="form-group">

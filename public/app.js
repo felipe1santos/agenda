@@ -64,6 +64,43 @@ function addDays(dateStr, n) {
   return formatDate(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+// ---- Campos com máscara BR (dd/mm/aaaa e hora 24h) ---- //
+function maskDateBR(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 8);
+  if (v.length > 4) v = v.slice(0, 2) + '/' + v.slice(2, 4) + '/' + v.slice(4);
+  else if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2);
+  el.value = v;
+}
+
+function maskTime24(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 4);
+  if (v.length >= 3) v = v.slice(0, v.length - 2) + ':' + v.slice(-2);
+  el.value = v;
+}
+
+function brToISO(br) {
+  const m = (br || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  const dt = new Date(`${y}-${mo}-${d}T00:00:00`);
+  if (dt.getFullYear() !== +y || dt.getMonth() + 1 !== +mo || dt.getDate() !== +d) return null;
+  return `${y}-${mo}-${d}`;
+}
+
+function isoToBR(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function parseTime24(v) {
+  const m = (v || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = +m[1], min = +m[2];
+  if (h > 23 || min > 59) return null;
+  return pad(h) + ':' + pad(min);
+}
+
 function taskOccursOn(t, dateStr) {
   if (!t.date) return false;
   const end = t.endDate && t.endDate > t.date ? t.endDate : t.date;
@@ -466,7 +503,7 @@ function switchFormType(type) {
 }
 
 function checkEmendandoAutoFill() {
-  const dateStr = $('#inputDate').value;
+  const dateStr = brToISO($('#inputDate').value);
   const aviso = $('#emendandoAviso');
   if (!dateStr || !state.config.anchorDate) { aviso.classList.add('hidden'); return; }
 
@@ -483,7 +520,7 @@ function checkEmendandoAutoFill() {
 
 function openAddRecordModal(dateStr, defaultType) {
   specialTimeTouched = false;
-  $('#inputDate').value = dateStr;
+  $('#inputDate').value = isoToBR(dateStr);
   switchFormType(defaultType || 'special');
 
   if (state.specials[dateStr]) {
@@ -507,12 +544,13 @@ function openAddRecordModal(dateStr, defaultType) {
 }
 
 async function saveRecord() {
-  const dateStr = $('#inputDate').value;
-  if (!dateStr) return alert('Selecione uma data.');
+  const dateStr = brToISO($('#inputDate').value);
+  if (!dateStr) return alert('Data inválida. Use o formato dd/mm/aaaa.');
 
   if (currentFormType === 'special') {
-    const start = $('#specialStart').value;
-    const end = $('#specialEnd').value;
+    const start = parseTime24($('#specialStart').value);
+    const end = parseTime24($('#specialEnd').value);
+    if (!start || !end) return alert('Horário inválido. Use o formato 24h, ex: 08:00 ou 23:59.');
     const notify = $('#specialNotify').checked;
     const saved = await api(`/api/specials/${dateStr}`, 'PUT', { start, end, notify });
     state.specials[dateStr] = { start: saved.start, end: saved.end, notify: saved.notify };
@@ -523,8 +561,13 @@ async function saveRecord() {
   } else {
     const title = $('#taskTitle').value.trim();
     if (!title) return alert('Dê um título à tarefa.');
-    const endDate = $('#taskEndDate').value || null;
-    if (endDate && endDate < dateStr) return alert('A data final deve ser igual ou depois da data inicial.');
+    const endBR = $('#taskEndDate').value.trim();
+    let endDate = null;
+    if (endBR) {
+      endDate = brToISO(endBR);
+      if (!endDate) return alert('Data final inválida. Use o formato dd/mm/aaaa.');
+      if (endDate < dateStr) return alert('A data final deve ser igual ou depois da data inicial.');
+    }
     const priorityVal = $('#taskPriority').value;
     const priority = priorityVal ? parseInt(priorityVal, 10) : null;
     const obs = $('#taskObs').value.trim() || null;
@@ -543,7 +586,7 @@ async function saveRecord() {
 }
 
 async function deleteAbonoFromModal() {
-  const dateStr = $('#inputDate').value;
+  const dateStr = brToISO($('#inputDate').value);
   if (!dateStr || !state.abonos[dateStr]) return closeModals();
   await api(`/api/abonos/${dateStr}`, 'DELETE');
   delete state.abonos[dateStr];
@@ -552,7 +595,7 @@ async function deleteAbonoFromModal() {
 }
 
 async function deleteSpecialFromModal() {
-  const dateStr = $('#inputDate').value;
+  const dateStr = brToISO($('#inputDate').value);
   if (!dateStr || !state.specials[dateStr]) return closeModals();
   await api(`/api/specials/${dateStr}`, 'DELETE');
   delete state.specials[dateStr];
@@ -659,8 +702,8 @@ function openTaskModal(id, defaultDate) {
   $('#taskModalTitle').textContent = task ? 'Editar Tarefa' : 'Nova Tarefa';
   $('#taskModalId').value = task ? task.id : '';
   $('#taskModalTitleInput').value = task ? task.title : '';
-  $('#taskModalDate').value = task ? (task.date || '') : (defaultDate || '');
-  $('#taskModalEndDate').value = task ? (task.endDate || '') : '';
+  $('#taskModalDate').value = task ? isoToBR(task.date) : isoToBR(defaultDate);
+  $('#taskModalEndDate').value = task ? isoToBR(task.endDate) : '';
   $('#taskModalPriority').value = task && task.priority ? String(task.priority) : '';
   $('#taskModalObs').value = task ? (task.obs || '') : '';
   $('#taskModalNotify').checked = task ? !!task.notify : false;
@@ -671,8 +714,12 @@ async function saveTaskModal() {
   const id = $('#taskModalId').value;
   const title = $('#taskModalTitleInput').value.trim();
   if (!title) return alert('Dê um título à tarefa.');
-  const date = $('#taskModalDate').value || null;
-  const endDate = $('#taskModalEndDate').value || null;
+  const dateBR = $('#taskModalDate').value.trim();
+  const date = dateBR ? brToISO(dateBR) : null;
+  if (dateBR && !date) return alert('Data inválida. Use o formato dd/mm/aaaa.');
+  const endBR = $('#taskModalEndDate').value.trim();
+  const endDate = endBR ? brToISO(endBR) : null;
+  if (endBR && !endDate) return alert('Data final inválida. Use o formato dd/mm/aaaa.');
   if (date && endDate && endDate < date) return alert('A data final deve ser igual ou depois da data inicial.');
   const priorityVal = $('#taskModalPriority').value;
   const priority = priorityVal ? parseInt(priorityVal, 10) : null;
@@ -1037,15 +1084,15 @@ function confirmDeleteRecurring(id) {
 
 // ===================== Configurações ===================== //
 function openConfigModal() {
-  $('#anchorDiaDate').value = state.config.anchorDate || '';
+  $('#anchorDiaDate').value = isoToBR(state.config.anchorDate);
   const folgaDays = (state.config.cycleLength || 3) - 1;
   $('#folgaDays').value = folgaDays >= 1 ? folgaDays : 2;
   openModal('configModal');
 }
 
 async function saveConfig() {
-  const anchorDate = $('#anchorDiaDate').value || null;
-  if (!anchorDate) return alert('Informe a data de um dia de TRABALHO.');
+  const anchorDate = brToISO($('#anchorDiaDate').value);
+  if (!anchorDate) return alert('Informe a data de um dia de TRABALHO no formato dd/mm/aaaa.');
   const folgaDays = parseInt($('#folgaDays').value, 10);
   if (!folgaDays || folgaDays < 1) return alert('Informe os dias de folga (mínimo 1).');
   const cycleLength = folgaDays + 1;
