@@ -161,36 +161,23 @@
         </div>
 
         <div class="type-selector">
-            <button class="type-btn active" id="btnTypeSpecial" onclick="switchFormType('special')">Especial</button>
-            <button class="type-btn" id="btnTypeTask" onclick="switchFormType('task')">Tarefa</button>
+            <button class="type-btn active" id="btnTypeTask" onclick="switchFormType('task')">Tarefa</button>
             <button class="type-btn" id="btnTypeAbono" onclick="switchFormType('abono')">Abono</button>
         </div>
 
         <div class="form-group">
             <label>Data</label>
-            <input type="text" id="inputDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this); checkEmendandoAutoFill()">
-            <small id="emendandoAviso" class="hint hint-special hidden">Dia de trabalho! Horário ajustado para Emendar.</small>
+            <input type="text" id="inputDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
         </div>
 
-        <div id="formSpecial">
-            <div class="form-row">
-                <div class="form-group" style="flex:1;">
-                    <label>Hora Início (24h)</label>
-                    <input type="text" id="specialStart" class="form-control" value="18:00" placeholder="HH:MM" inputmode="numeric" maxlength="5" oninput="specialTimeTouched = true; maskTime24(this)">
-                </div>
-                <div class="form-group" style="flex:1;">
-                    <label>Hora Fim (24h)</label>
-                    <input type="text" id="specialEnd" class="form-control" value="06:00" placeholder="HH:MM" inputmode="numeric" maxlength="5" oninput="specialTimeTouched = true; maskTime24(this)">
-                </div>
-            </div>
-            <label class="checkbox-row"><input type="checkbox" id="specialNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
-            <button class="btn-secondary" id="btnDeleteSpecial" onclick="deleteSpecialFromModal()">Remover Especial deste dia</button>
-        </div>
-
-        <div id="formTask" class="hidden">
+        <div id="formTask">
             <div class="form-group">
                 <label>Título da Tarefa</label>
                 <input type="text" id="taskTitle" class="form-control" placeholder="Ex: Médico, Aniversário">
+            </div>
+            <div class="form-group">
+                <label>Horário (opcional, 24h)</label>
+                <input type="text" id="taskTime" class="form-control" placeholder="HH:MM" inputmode="numeric" maxlength="5" oninput="maskTime24(this)">
             </div>
             <div class="form-group">
                 <label>Prioridade</label>
@@ -235,6 +222,10 @@
         <div class="form-group">
             <label>Título</label>
             <input type="text" id="taskModalTitleInput" class="form-control" placeholder="O que precisa fazer?">
+        </div>
+        <div class="form-group">
+            <label>Horário (opcional, 24h)</label>
+            <input type="text" id="taskModalTime" class="form-control" placeholder="HH:MM" inputmode="numeric" maxlength="5" oninput="maskTime24(this)">
         </div>
         <div class="form-group">
             <label>Data (opcional)</label>
@@ -313,8 +304,8 @@
         </div>
         <div id="daySheetBody"></div>
         <div class="day-sheet-actions">
-            <button class="btn-secondary" onclick="openAddRecordForDay('special')">Editar Especial</button>
             <button class="btn-secondary" onclick="openAddRecordForDay('task')">+ Nova Tarefa</button>
+            <button class="btn-secondary" onclick="openAddRecordForDay('abono')">Marcar Abono</button>
         </div>
     </div>
 </div>

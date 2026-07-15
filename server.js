@@ -120,6 +120,7 @@ for (const stmt of [
   'ALTER TABLE specials ADD COLUMN notify INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE project_steps ADD COLUMN obs TEXT',
   'ALTER TABLE tasks ADD COLUMN end_date TEXT',
+  'ALTER TABLE tasks ADD COLUMN time TEXT',
 ]) {
   try { db.exec(stmt); } catch (e) { /* coluna já existe */ }
 }
@@ -197,6 +198,7 @@ app.get('/api/state', (req, res) => {
     title: t.title,
     date: t.date,
     endDate: t.end_date,
+    time: t.time,
     priority: t.priority,
     obs: t.obs,
     done: !!t.done,
@@ -265,16 +267,18 @@ app.delete('/api/specials/:date', (req, res) => {
 });
 
 // ---------- Tasks ----------
+const validTime = (v) => (v && /^\d{2}:\d{2}$/.test(v) ? v : null);
+
 app.post('/api/tasks', (req, res) => {
-  const { title, date, endDate, priority, obs, notify } = req.body || {};
+  const { title, date, endDate, time, priority, obs, notify } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: 'title é obrigatório' });
   const end = date && endDate && /^\d{4}-\d{2}-\d{2}$/.test(endDate) && endDate > date ? endDate : null;
   const id = uuid();
   db.prepare(`
-    INSERT INTO tasks (id, title, date, end_date, priority, obs, done, created_at, notify)
-    VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
-  `).run(id, title.trim(), date || null, end, priority ?? null, obs || null, now(), toBool(notify));
-  res.status(201).json({ id, title: title.trim(), date: date || null, endDate: end, priority: priority ?? null, obs: obs || null, done: false, notify: !!notify });
+    INSERT INTO tasks (id, title, date, end_date, time, priority, obs, done, created_at, notify)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+  `).run(id, title.trim(), date || null, end, validTime(time), priority ?? null, obs || null, now(), toBool(notify));
+  res.status(201).json({ id, title: title.trim(), date: date || null, endDate: end, time: validTime(time), priority: priority ?? null, obs: obs || null, done: false, notify: !!notify });
 });
 
 app.put('/api/tasks/:id', (req, res) => {
@@ -285,15 +289,16 @@ app.put('/api/tasks/:id', (req, res) => {
   const date = Object.prototype.hasOwnProperty.call(body, 'date') ? body.date : existing.date;
   const rawEnd = Object.prototype.hasOwnProperty.call(body, 'endDate') ? body.endDate : existing.end_date;
   const endDate = date && rawEnd && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) && rawEnd > date ? rawEnd : null;
+  const time = validTime(Object.prototype.hasOwnProperty.call(body, 'time') ? body.time : existing.time);
   const priority = Object.prototype.hasOwnProperty.call(body, 'priority') ? body.priority : existing.priority;
   const obs = Object.prototype.hasOwnProperty.call(body, 'obs') ? body.obs : existing.obs;
   const done = Object.prototype.hasOwnProperty.call(body, 'done') ? toBool(body.done) : existing.done;
   const notify = Object.prototype.hasOwnProperty.call(body, 'notify') ? toBool(body.notify) : existing.notify;
 
-  db.prepare('UPDATE tasks SET title = ?, date = ?, end_date = ?, priority = ?, obs = ?, done = ?, notify = ? WHERE id = ?')
-    .run(title, date, endDate, priority, obs, done, notify, req.params.id);
+  db.prepare('UPDATE tasks SET title = ?, date = ?, end_date = ?, time = ?, priority = ?, obs = ?, done = ?, notify = ? WHERE id = ?')
+    .run(title, date, endDate, time, priority, obs, done, notify, req.params.id);
 
-  res.json({ id: req.params.id, title, date, endDate, priority, obs, done: !!done, notify: !!notify });
+  res.json({ id: req.params.id, title, date, endDate, time, priority, obs, done: !!done, notify: !!notify });
 });
 
 app.delete('/api/tasks/:id', (req, res) => {

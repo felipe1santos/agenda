@@ -23,8 +23,7 @@ let currentDate = new Date();
 let currentShoppingCat = null;
 let viewMode = localStorage.getItem('agendaViewMode') || 'list';
 let currentTab = 'calendar';
-let currentFormType = 'special';
-let specialTimeTouched = false;
+let currentFormType = 'task';
 let currentSheetDate = null;
 let deferredPrompt = null;
 
@@ -261,7 +260,7 @@ function toggleCollapse(id) {
 
 // ===================== FAB ===================== //
 function onFabClick() {
-  if (currentTab === 'calendar') openAddRecordModal(todayISO(), 'special');
+  if (currentTab === 'calendar') openAddRecordModal(todayISO(), 'task');
   else if (currentTab === 'tasks') openTaskModal(null, null);
   else if (currentTab === 'projects') openModal('projectModal');
   else if (currentTab === 'recurring') openRecurringModal(null);
@@ -359,7 +358,7 @@ function getDayTags(dateStr, shift) {
     .sort((a, b) => (b.priority || 0) - (a.priority || 0))
     .forEach((t) => {
       const color = t.priority ? colorsMap[t.priority] : 'var(--text-muted)';
-      tags.push({ label: t.title, cls: 'day-tag-task', style: `background-color:color-mix(in srgb, ${color} 18%, white); color:${color}` });
+      tags.push({ label: (t.time ? t.time + ' ' : '') + t.title, cls: 'day-tag-task', style: `background-color:color-mix(in srgb, ${color} 18%, white); color:${color}` });
     });
 
   return tags;
@@ -426,7 +425,7 @@ function renderDayBody(dateStr, shift) {
   const sp = state.specials[dateStr];
   if (sp) {
     const isEmendando = shift.cycleIndex === 0;
-    html += `<div class="special-alert" onclick="event.stopPropagation(); openAddRecordForDateDirect('${dateStr}')">ESPECIAL: ${sp.start} às ${sp.end}${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>`;
+    html += `<div class="special-alert" onclick="event.stopPropagation(); openSpecialsListModal()">ESPECIAL: ${sp.start} às ${sp.end}${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>`;
   }
 
   const mk = monthKeyOf(dateStr);
@@ -435,7 +434,9 @@ function renderDayBody(dateStr, shift) {
     html += `<div class="recurring-alert ${pending ? 'pending' : 'done'}" onclick="event.stopPropagation(); toggleRecurringMonth('${r.id}','${mk}')">🔁 ${escapeHtml(r.title)} ${pending ? '<span class="recurring-hint">toque p/ confirmar</span>' : '✓ feito'}</div>`;
   });
 
-  const dayTasks = state.tasks.filter((t) => taskOccursOn(t, dateStr));
+  const dayTasks = state.tasks
+    .filter((t) => taskOccursOn(t, dateStr))
+    .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
   if (dayTasks.length) {
     html += '<div class="event-list">';
     dayTasks.forEach((t) => {
@@ -449,7 +450,7 @@ function renderDayBody(dateStr, shift) {
         <div class="event-item ${t.done ? 'done' : ''}">
           ${fire}
           <div class="event-details">
-            <span class="event-title">${escapeHtml(t.title)}</span>
+            <span class="event-title">${t.time ? `<span class="event-time">${t.time}</span> ` : ''}${escapeHtml(t.title)}</span>
             ${t.obs ? `<span class="event-obs">${escapeHtml(t.obs)}</span>` : ''}
             ${range}
           </div>
@@ -482,10 +483,6 @@ function openAddRecordForDay(type) {
   openAddRecordModal(currentSheetDate, type);
 }
 
-function openAddRecordForDateDirect(dateStr) {
-  openAddRecordModal(dateStr, 'special');
-}
-
 function openAbonoForDate(dateStr) {
   openAddRecordModal(dateStr, 'abono');
 }
@@ -493,53 +490,21 @@ function openAbonoForDate(dateStr) {
 // ===================== Modal: Adicionar Registro ===================== //
 function switchFormType(type) {
   currentFormType = type;
-  $('#btnTypeSpecial').classList.toggle('active', type === 'special');
   $('#btnTypeTask').classList.toggle('active', type === 'task');
   $('#btnTypeAbono').classList.toggle('active', type === 'abono');
-  $('#formSpecial').classList.toggle('hidden', type !== 'special');
   $('#formTask').classList.toggle('hidden', type !== 'task');
   $('#formAbono').classList.toggle('hidden', type !== 'abono');
-  checkEmendandoAutoFill();
-}
-
-function checkEmendandoAutoFill() {
-  const dateStr = brToISO($('#inputDate').value);
-  const aviso = $('#emendandoAviso');
-  if (!dateStr || !state.config.anchorDate) { aviso.classList.add('hidden'); return; }
-
-  const idx = getCycleIndex(dateStr);
-  const isEmendando = idx === 0 && currentFormType === 'special';
-  aviso.classList.toggle('hidden', !isEmendando);
-
-  if (currentFormType !== 'special') return;
-  if (state.specials[dateStr]) return;
-  if (specialTimeTouched) return;
-
-  if (idx === 0) { $('#specialStart').value = '22:00'; $('#specialEnd').value = '06:00'; }
 }
 
 function openAddRecordModal(dateStr, defaultType) {
-  specialTimeTouched = false;
   $('#inputDate').value = isoToBR(dateStr);
-  switchFormType(defaultType || 'special');
-
-  if (state.specials[dateStr]) {
-    $('#specialStart').value = state.specials[dateStr].start;
-    $('#specialEnd').value = state.specials[dateStr].end;
-    $('#specialNotify').checked = !!state.specials[dateStr].notify;
-    $('#btnDeleteSpecial').classList.remove('hidden');
-  } else {
-    $('#specialStart').value = '18:00';
-    $('#specialEnd').value = '06:00';
-    $('#specialNotify').checked = false;
-    $('#btnDeleteSpecial').classList.add('hidden');
-  }
+  switchFormType(defaultType || 'task');
 
   $('#taskNotify').checked = false;
   $('#taskEndDate').value = '';
+  $('#taskTime').value = '';
   $('#btnDeleteAbono').classList.toggle('hidden', !state.abonos[dateStr]);
 
-  checkEmendandoAutoFill();
   openModal('addRecordModal');
 }
 
@@ -547,14 +512,7 @@ async function saveRecord() {
   const dateStr = brToISO($('#inputDate').value);
   if (!dateStr) return alert('Data inválida. Use o formato dd/mm/aaaa.');
 
-  if (currentFormType === 'special') {
-    const start = parseTime24($('#specialStart').value);
-    const end = parseTime24($('#specialEnd').value);
-    if (!start || !end) return alert('Horário inválido. Use o formato 24h, ex: 08:00 ou 23:59.');
-    const notify = $('#specialNotify').checked;
-    const saved = await api(`/api/specials/${dateStr}`, 'PUT', { start, end, notify });
-    state.specials[dateStr] = { start: saved.start, end: saved.end, notify: saved.notify };
-  } else if (currentFormType === 'abono') {
+  if (currentFormType === 'abono') {
     if (getCycleIndex(dateStr) !== 0) return alert('Abono só pode ser marcado em um dia de TRABALHO.');
     await api(`/api/abonos/${dateStr}`, 'PUT');
     state.abonos[dateStr] = true;
@@ -568,17 +526,24 @@ async function saveRecord() {
       if (!endDate) return alert('Data final inválida. Use o formato dd/mm/aaaa.');
       if (endDate < dateStr) return alert('A data final deve ser igual ou depois da data inicial.');
     }
+    const timeBR = $('#taskTime').value.trim();
+    let time = null;
+    if (timeBR) {
+      time = parseTime24(timeBR);
+      if (!time) return alert('Horário inválido. Use o formato 24h, ex: 08:00 ou 23:59.');
+    }
     const priorityVal = $('#taskPriority').value;
     const priority = priorityVal ? parseInt(priorityVal, 10) : null;
     const obs = $('#taskObs').value.trim() || null;
     const notify = $('#taskNotify').checked;
-    const created = await api('/api/tasks', 'POST', { title, date: dateStr, endDate, priority, obs, notify });
+    const created = await api('/api/tasks', 'POST', { title, date: dateStr, endDate, time, priority, obs, notify });
     state.tasks.push(created);
     $('#taskTitle').value = '';
     $('#taskObs').value = '';
     $('#taskPriority').value = '';
     $('#taskNotify').checked = false;
     $('#taskEndDate').value = '';
+    $('#taskTime').value = '';
   }
 
   closeModals();
@@ -590,15 +555,6 @@ async function deleteAbonoFromModal() {
   if (!dateStr || !state.abonos[dateStr]) return closeModals();
   await api(`/api/abonos/${dateStr}`, 'DELETE');
   delete state.abonos[dateStr];
-  closeModals();
-  renderAll();
-}
-
-async function deleteSpecialFromModal() {
-  const dateStr = brToISO($('#inputDate').value);
-  if (!dateStr || !state.specials[dateStr]) return closeModals();
-  await api(`/api/specials/${dateStr}`, 'DELETE');
-  delete state.specials[dateStr];
   closeModals();
   renderAll();
 }
@@ -664,6 +620,7 @@ function taskListItemHtml(t, context) {
 
   const metaParts = [];
   if (t.date) metaParts.push(formatDateBR(t.date) + (t.endDate && t.endDate !== t.date ? ' até ' + formatDateBR(t.endDate) : ''));
+  if (t.time) metaParts.push('⏰ ' + t.time);
   if (t.obs) metaParts.push(escapeHtml(t.obs));
 
   let actions;
@@ -704,6 +661,7 @@ function openTaskModal(id, defaultDate) {
   $('#taskModalTitleInput').value = task ? task.title : '';
   $('#taskModalDate').value = task ? isoToBR(task.date) : isoToBR(defaultDate);
   $('#taskModalEndDate').value = task ? isoToBR(task.endDate) : '';
+  $('#taskModalTime').value = task ? (task.time || '') : '';
   $('#taskModalPriority').value = task && task.priority ? String(task.priority) : '';
   $('#taskModalObs').value = task ? (task.obs || '') : '';
   $('#taskModalNotify').checked = task ? !!task.notify : false;
@@ -721,17 +679,23 @@ async function saveTaskModal() {
   const endDate = endBR ? brToISO(endBR) : null;
   if (endBR && !endDate) return alert('Data final inválida. Use o formato dd/mm/aaaa.');
   if (date && endDate && endDate < date) return alert('A data final deve ser igual ou depois da data inicial.');
+  const timeBR = $('#taskModalTime').value.trim();
+  let time = null;
+  if (timeBR) {
+    time = parseTime24(timeBR);
+    if (!time) return alert('Horário inválido. Use o formato 24h, ex: 08:00 ou 23:59.');
+  }
   const priorityVal = $('#taskModalPriority').value;
   const priority = priorityVal ? parseInt(priorityVal, 10) : null;
   const obs = $('#taskModalObs').value.trim() || null;
   const notify = $('#taskModalNotify').checked;
 
   if (id) {
-    const updated = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, priority, obs, notify });
+    const updated = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, time, priority, obs, notify });
     const idx = state.tasks.findIndex((t) => t.id === id);
     state.tasks[idx] = updated;
   } else {
-    const created = await api('/api/tasks', 'POST', { title, date, endDate, priority, obs, notify });
+    const created = await api('/api/tasks', 'POST', { title, date, endDate, time, priority, obs, notify });
     state.tasks.push(created);
   }
 
