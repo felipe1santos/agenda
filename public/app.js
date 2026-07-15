@@ -355,7 +355,7 @@ function getDayTags(dateStr, shift) {
 
   state.tasks
     .filter((t) => taskOccursOn(t, dateStr) && !t.done)
-    .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+    .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || (b.priority || 0) - (a.priority || 0))
     .forEach((t) => {
       const color = t.priority ? colorsMap[t.priority] : 'var(--text-muted)';
       tags.push({ label: (t.time ? t.time + ' ' : '') + t.title, cls: 'day-tag-task', style: `background-color:color-mix(in srgb, ${color} 18%, white); color:${color}` });
@@ -436,7 +436,7 @@ function renderDayBody(dateStr, shift) {
 
   const dayTasks = state.tasks
     .filter((t) => taskOccursOn(t, dateStr))
-    .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+    .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || (b.priority || 0) - (a.priority || 0));
   if (dayTasks.length) {
     html += '<div class="event-list">';
     dayTasks.forEach((t) => {
@@ -600,7 +600,9 @@ function confirmDeleteSpecial(dateStr) {
 
 // ===================== Tarefas ===================== //
 function renderTasks() {
-  const upcoming = state.tasks.filter((t) => t.date && !t.done).sort((a, b) => a.date.localeCompare(b.date));
+  const upcoming = state.tasks
+    .filter((t) => t.date && !t.done)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '99:99').localeCompare(b.time || '99:99'));
   const backlog = state.tasks.filter((t) => !t.date && !t.done);
   const done = state.tasks.filter((t) => t.done);
 
