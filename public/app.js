@@ -500,7 +500,7 @@ function openAddRecordModal(dateStr, defaultType) {
   $('#inputDate').value = isoToBR(dateStr);
   switchFormType(defaultType || 'task');
 
-  $('#taskNotify').checked = false;
+  $('#taskNotify').checked = true;
   $('#taskEndDate').value = '';
   $('#taskTime').value = '';
   $('#btnDeleteAbono').classList.toggle('hidden', !state.abonos[dateStr]);
@@ -536,12 +536,12 @@ async function saveRecord() {
     const priority = priorityVal ? parseInt(priorityVal, 10) : null;
     const obs = $('#taskObs').value.trim() || null;
     const notify = $('#taskNotify').checked;
+    if (notify) ensureNotificationPermission();
     const created = await api('/api/tasks', 'POST', { title, date: dateStr, endDate, time, priority, obs, notify });
     state.tasks.push(created);
     $('#taskTitle').value = '';
     $('#taskObs').value = '';
     $('#taskPriority').value = '';
-    $('#taskNotify').checked = false;
     $('#taskEndDate').value = '';
     $('#taskTime').value = '';
   }
@@ -666,7 +666,7 @@ function openTaskModal(id, defaultDate) {
   $('#taskModalTime').value = task ? (task.time || '') : '';
   $('#taskModalPriority').value = task && task.priority ? String(task.priority) : '';
   $('#taskModalObs').value = task ? (task.obs || '') : '';
-  $('#taskModalNotify').checked = task ? !!task.notify : false;
+  $('#taskModalNotify').checked = task ? !!task.notify : true;
   openModal('taskModal');
 }
 
@@ -691,6 +691,7 @@ async function saveTaskModal() {
   const priority = priorityVal ? parseInt(priorityVal, 10) : null;
   const obs = $('#taskModalObs').value.trim() || null;
   const notify = $('#taskModalNotify').checked;
+  if (notify) ensureNotificationPermission();
 
   if (id) {
     const updated = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, time, priority, obs, notify });
