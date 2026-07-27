@@ -12,13 +12,14 @@
     --cor-folga: #10b981;
     --cor-especial: #ef4444; /* Vermelho */
 
-    /* Cores de Prioridade (1 a 5) */
-    --prio-1: #10b981; /* Verde */
-    --prio-2: #f59e0b; /* Laranja */
-    --prio-3: #8b5cf6; /* Roxo */
-    --prio-4: #d946ef; /* Transição Rosa/Roxo */
-    --prio-5: #1e293b; /* Preto - Máxima (vermelho fica reservado às Especiais) */
+    /* Cores de Prioridade (1 a 5) — escala visual crescente */
+    --prio-1: #4ade80; /* Verde claro */
+    --prio-2: #facc15; /* Amarelo */
+    --prio-3: #f97316; /* Laranja */
+    --prio-4: #dc2626; /* Vermelho forte */
+    --prio-5: #b91c1c; /* Vermelho piscando (máxima) */
 }
+
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 
@@ -95,8 +96,6 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 .event-list { display: flex; flex-direction: column; gap: 6px; }
 .event-item { background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .event-item.done .event-title { text-decoration: line-through; opacity: 0.55; }
-.fire-badge { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0; }
-.fire-badge svg { width: 14px; height: 14px; }
 .event-details { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .event-title { font-weight: 600; }
 .event-time { color: var(--primary); font-weight: bold; }
@@ -130,8 +129,22 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
     box-shadow: 0 4px 10px rgba(59, 130, 246, 0.25);
     z-index: 2;
 }
-.mode-grid .day-header { margin-bottom: 4px; width: 100%; display: block; }
+.mode-grid .day-header { margin-bottom: 4px; width: 100%; display: flex; justify-content: space-between; align-items: flex-start; gap: 2px; }
 .mode-grid .day-info { gap: 0; }
+.day-weekday {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 1px 4px;
+    line-height: 1.3;
+    flex-shrink: 0;
+}
+.day-card.is-today .day-weekday { color: #fff; background: var(--primary); border-color: var(--primary); }
+.day-card.folga-estendida .day-weekday { color: var(--cor-folga); border-color: var(--cor-folga); background: #fff; }
 .mode-grid .day-name { display: none; }
 .mode-grid .day-number { font-size: 20px; }
 .mode-grid .shift-badge { display: none; }
@@ -139,7 +152,8 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 
 /* Fitinha/tag dentro do card da grade */
 .day-tags { display: flex; flex-direction: column; gap: 2px; margin-top: auto; }
-.day-tag { font-size: 11px; font-weight: bold; color: white; border-radius: 4px; padding: 3px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
+.day-tag { font-size: 11px; font-weight: bold; color: white; border-radius: 4px; padding: 3px 5px; line-height: 1.4; display: flex; align-items: center; gap: 3px; min-width: 0; }
+.day-tag-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .day-tag-dia { background-color: var(--cor-dia); }
 .day-tag-noite { background-color: var(--cor-noite); }
 .day-tag-especial { background-color: var(--cor-especial); }
@@ -236,13 +250,94 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 .hint-special { color: var(--cor-especial); font-weight: bold; }
 .confirm-message { font-size: 14px; color: var(--text-main); margin-bottom: 16px; line-height: 1.5; }
 
-.type-selector { display: flex; gap: 10px; margin-bottom: 20px; }
-.type-btn { flex: 1; padding: 10px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 8px; font-size: 14px; cursor: pointer; }
-.type-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-
 .btn-submit { width: 100%; background: var(--primary); color: white; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
 .btn-secondary { width: 100%; background: var(--bg-color); color: var(--text-main); padding: 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 10px; }
 .btn-danger { background: var(--cor-especial); }
 
 .day-sheet-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 #daySheetBody { max-height: 55vh; overflow-y: auto; }
+
+/* ===================== PRIORIDADE: FUNDO ACESO ===================== */
+/* Fica no fim do arquivo de propósito: precisa vencer o fundo padrão de
+   .list-item / .event-item / .day-tag-task sem depender de !important. */
+.prio-fill { color: #fff; border-color: transparent; }
+.prio-fill .item-meta,
+.prio-fill .event-obs,
+.prio-fill .event-time,
+.prio-fill .item-obs,
+.prio-fill .item-title,
+.prio-fill .event-title { color: inherit; }
+.prio-fill .item-meta,
+.prio-fill .event-obs { opacity: 0.85; }
+.prio-fill .check-circle { border-color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.22); color: inherit; }
+.prio-fill .icon-btn,
+.prio-fill .event-actions button { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.45); color: inherit; }
+
+.prio-fill-1 { background: var(--prio-1); color: #14532d; }
+.prio-fill-2 { background: var(--prio-2); color: #422006; }
+.prio-fill-3 { background: var(--prio-3); color: #fff; }
+.prio-fill-4 { background: var(--prio-4); color: #fff; }
+.prio-fill-5 { background: var(--prio-5); color: #fff; animation: pulse-danger 1.1s ease-in-out infinite; }
+
+.prio-fill-1 .check-circle, .prio-fill-2 .check-circle { border-color: rgba(0,0,0,0.35); background: rgba(255,255,255,0.55); }
+.prio-fill-1 .icon-btn, .prio-fill-2 .icon-btn,
+.prio-fill-1 .event-actions button, .prio-fill-2 .event-actions button { background: rgba(255,255,255,0.55); border-color: rgba(0,0,0,0.15); }
+
+@keyframes pulse-danger {
+    0%, 100% { background: var(--prio-5); box-shadow: 0 0 0 0 rgba(185,28,28,0.6); }
+    50% { background: #ef4444; box-shadow: 0 0 0 7px rgba(185,28,28,0); }
+}
+
+/* Ícone de alerta — só na prioridade máxima */
+.prio-alert { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 22px; height: 22px; }
+.prio-alert svg { width: 20px; height: 20px; }
+.day-tag .prio-alert { width: 13px; height: 13px; }
+.day-tag .prio-alert svg { width: 13px; height: 13px; }
+
+/* ===================== FORMULÁRIO DE TAREFA (GRANDE) ===================== */
+.modal-task { padding: 20px 16px 24px; }
+
+.field-card { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.field-label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 8px; }
+.field-label .opt { font-weight: 500; text-transform: none; letter-spacing: 0; opacity: 0.75; }
+.field-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.field-head .field-label { margin-bottom: 0; flex-shrink: 0; }
+
+.input-hero { width: 100%; border: none; background: transparent; font-size: 22px; font-weight: 700; color: var(--text-main); padding: 4px 0; }
+.input-hero::placeholder { color: #cbd5e1; font-weight: 600; }
+.input-hero:focus { outline: none; }
+
+.time-hero, .date-hero { flex: 1; min-width: 0; border: none; background: transparent; font-weight: 800; color: var(--text-main); padding: 2px 0; text-align: right; }
+.time-hero { font-size: 30px; letter-spacing: 0.02em; }
+.date-hero { font-size: 20px; }
+.time-hero:focus, .date-hero:focus { outline: none; }
+.time-hero::placeholder, .date-hero::placeholder { color: #cbd5e1; }
+.chip-clear { background: none; border: none; color: var(--text-muted); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 4px; flex-shrink: 0; }
+
+.hour-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.hour-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 7px 2px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 9px; cursor: pointer; color: var(--text-main); }
+.hour-main { font-size: 14px; font-weight: 700; line-height: 1.1; }
+.hour-sub { font-size: 9px; color: var(--text-muted); letter-spacing: 0.02em; }
+.hour-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.hour-btn.active .hour-sub { color: rgba(255,255,255,0.85); }
+
+.minute-row { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.minute-btn { flex: 1; min-width: 46px; padding: 9px 4px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; color: var(--text-main); }
+.minute-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { padding: 9px 12px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-main); }
+
+.prio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+/* sem background aqui: o fundo colorido vem de .prio-fill-N (definido acima) */
+.prio-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 12px 4px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; color: var(--text-main); opacity: 0.6; }
+.prio-btn-0 { background: var(--card-bg); }
+.prio-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.prio-btn.active { opacity: 1; box-shadow: 0 0 0 3px rgba(59,130,246,0.35); }
+.prio-btn-0.active { border-color: var(--primary); color: var(--primary); }
+
+.expand-btn { width: 100%; background: none; border: 1px dashed var(--border-color); border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 600; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.expand-btn.open .chevron { transform: rotate(180deg); }
+#taskAdvanced { padding-top: 14px; }
+
+.btn-hero { padding: 16px; font-size: 17px; border-radius: 12px; }

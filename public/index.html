@@ -152,17 +152,12 @@
     </div>
 </div>
 
-<!-- ===================== MODAL: ADICIONAR REGISTRO (Calendário) ===================== -->
-<div class="modal-overlay" id="addRecordModal">
+<!-- ===================== MODAL: ABONO ===================== -->
+<div class="modal-overlay" id="abonoModal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Adicionar Registro</h3>
+            <h3>Marcar Abono</h3>
             <button class="btn-close" onclick="closeModals()">&times;</button>
-        </div>
-
-        <div class="type-selector">
-            <button class="type-btn active" id="btnTypeTask" onclick="switchFormType('task')">Tarefa</button>
-            <button class="type-btn" id="btnTypeAbono" onclick="switchFormType('abono')">Abono</button>
         </div>
 
         <div class="form-group">
@@ -170,90 +165,71 @@
             <input type="text" id="inputDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
         </div>
 
-        <div id="formTask">
-            <div class="form-group">
-                <label>Título da Tarefa</label>
-                <input type="text" id="taskTitle" class="form-control" placeholder="Ex: Médico, Aniversário">
-            </div>
-            <div class="form-group">
-                <label>Horário (opcional, 24h)</label>
-                <input type="text" id="taskTime" class="form-control" placeholder="HH:MM" inputmode="numeric" maxlength="5" oninput="maskTime24(this)">
-            </div>
-            <div class="form-group">
-                <label>Prioridade</label>
-                <select id="taskPriority" class="form-control">
-                    <option value="">Sem prioridade</option>
-                    <option value="1">1 - Verde</option>
-                    <option value="2">2 - Laranja</option>
-                    <option value="3">3 - Roxo</option>
-                    <option value="4">4 - Rosa Escuro</option>
-                    <option value="5">5 - Preto (Máxima)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Repetir até (opcional)</label>
-                <input type="text" id="taskEndDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
-                <small class="hint">A tarefa aparece em todos os dias entre a data e esta data final.</small>
-            </div>
-            <div class="form-group">
-                <label>Observação</label>
-                <input type="text" id="taskObs" class="form-control" placeholder="Detalhes adicionais...">
-            </div>
-            <label class="checkbox-row"><input type="checkbox" id="taskNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
-        </div>
+        <p class="confirm-message">Abono transforma um dia de <strong>trabalho</strong> em folga. Todos os dias de folga em sequência (antes e depois) acendem em <strong style="color:#10b981">verde</strong> como folga prolongada.</p>
+        <button class="btn-secondary" id="btnDeleteAbono" onclick="deleteAbonoFromModal()">Remover Abono deste dia</button>
 
-        <div id="formAbono" class="hidden">
-            <p class="confirm-message">Abono transforma um dia de <strong>trabalho</strong> em folga. Todos os dias de folga em sequência (antes e depois) acendem em <strong style="color:#10b981">verde</strong> como folga prolongada.</p>
-            <button class="btn-secondary" id="btnDeleteAbono" onclick="deleteAbonoFromModal()">Remover Abono deste dia</button>
-        </div>
-
-        <button class="btn-submit" onclick="saveRecord()">Salvar</button>
+        <button class="btn-submit" onclick="saveAbono()">Salvar</button>
     </div>
 </div>
 
 <!-- ===================== MODAL: TAREFA (criar/editar) ===================== -->
 <div class="modal-overlay" id="taskModal">
-    <div class="modal-content">
+    <div class="modal-content modal-task">
         <div class="modal-header">
             <h3 id="taskModalTitle">Nova Tarefa</h3>
             <button class="btn-close" onclick="closeModals()">&times;</button>
         </div>
         <input type="hidden" id="taskModalId">
-        <div class="form-group">
-            <label>Título</label>
-            <input type="text" id="taskModalTitleInput" class="form-control" placeholder="O que precisa fazer?">
+        <input type="hidden" id="taskModalPriority">
+
+        <div class="field-card">
+            <label class="field-label">Tarefa</label>
+            <input type="text" id="taskModalTitleInput" class="input-hero" placeholder="O que precisa fazer?" autocomplete="off">
         </div>
-        <div class="form-group">
-            <label>Horário (opcional, 24h)</label>
-            <input type="text" id="taskModalTime" class="form-control" placeholder="HH:MM" inputmode="numeric" maxlength="5" oninput="maskTime24(this)">
+
+        <div class="field-card">
+            <div class="field-head">
+                <label class="field-label">Horário</label>
+                <input type="text" id="taskModalTime" class="time-hero" placeholder="--:--" inputmode="numeric" maxlength="5" oninput="maskTime24(this); syncTimePicker()">
+                <button type="button" class="chip-clear" onclick="clearTaskTime()">limpar</button>
+            </div>
+            <div class="hour-grid" id="hourGrid"></div>
+            <div class="minute-row" id="minuteRow"></div>
         </div>
-        <div class="form-group">
-            <label>Data (opcional)</label>
-            <input type="text" id="taskModalDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
-            <small class="hint">Sem data = fica na Lista de Afazeres.</small>
+
+        <div class="field-card">
+            <div class="field-head">
+                <label class="field-label">Data</label>
+                <input type="text" id="taskModalDate" class="date-hero" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
+            </div>
+            <div class="chip-row">
+                <button type="button" class="chip" onclick="setTaskDateOffset(0)">Hoje</button>
+                <button type="button" class="chip" onclick="setTaskDateOffset(1)">Amanhã</button>
+                <button type="button" class="chip" onclick="setTaskDateOffset(7)">+7 dias</button>
+                <button type="button" class="chip" onclick="setTaskDateValue('')">Sem data</button>
+            </div>
         </div>
-        <div class="form-group">
-            <label>Repetir até (opcional)</label>
-            <input type="text" id="taskModalEndDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
-            <small class="hint">A tarefa aparece em todos os dias entre a data e esta data final.</small>
+
+        <div class="field-card">
+            <label class="field-label">Prioridade <span class="opt">opcional</span></label>
+            <div class="prio-row" id="prioRow"></div>
         </div>
-        <div class="form-group">
-            <label>Prioridade</label>
-            <select id="taskModalPriority" class="form-control">
-                <option value="">Sem prioridade</option>
-                <option value="1">1 - Verde</option>
-                <option value="2">2 - Laranja</option>
-                <option value="3">3 - Roxo</option>
-                <option value="4">4 - Rosa Escuro</option>
-                <option value="5">5 - Preto (Máxima)</option>
-            </select>
+
+        <button type="button" class="expand-btn" id="taskAdvancedBtn" onclick="toggleTaskAdvanced()">Mais opções <span class="chevron">▾</span></button>
+        <div id="taskAdvanced" class="hidden">
+            <div class="form-group">
+                <label>Repetir até</label>
+                <input type="text" id="taskModalEndDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
+                <small class="hint">A tarefa aparece em todos os dias entre a data e esta data final.</small>
+            </div>
+            <div class="form-group">
+                <label>Observação</label>
+                <input type="text" id="taskModalObs" class="form-control" placeholder="Detalhes adicionais...">
+            </div>
+            <label class="checkbox-row"><input type="checkbox" id="taskModalNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
         </div>
-        <div class="form-group">
-            <label>Observação</label>
-            <input type="text" id="taskModalObs" class="form-control" placeholder="Detalhes adicionais...">
-        </div>
-        <label class="checkbox-row"><input type="checkbox" id="taskModalNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
-        <button class="btn-submit" onclick="saveTaskModal()">Salvar</button>
+
+        <button class="btn-submit btn-hero" onclick="saveTaskModal()">Salvar</button>
     </div>
 </div>
 

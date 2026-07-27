@@ -1,16 +1,21 @@
 // ===================== Constantes ===================== //
-const fireSVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 11c0 2.5-2.5 4-2.5 4s1-1.5 1-3c0-2-1.5-3-1.5-3s-.5 1-.5 2c0 0-1-1-1.5-2.5C11 7 12 4 12 4s-3 2-4 5c-1 3 1 5 1 5s-1.5-1.5-1.5-3C7 13.5 5 16 5 18c0 3.5 3 6 7 6s7-2.5 7-6c0-2.5-1.5-7-1.5-7z"/></svg>`;
+const alertSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
 
-const colorsMap = { 1: 'var(--prio-1)', 2: 'var(--prio-2)', 3: 'var(--prio-3)', 4: 'var(--prio-4)', 5: 'var(--prio-5)' };
+// Escala visual de prioridade: 1 verde claro → 5 vermelho piscando
+const PRIORITY_LABELS = { 1: 'Baixa', 2: 'Média', 3: 'Alta', 4: 'Urgente', 5: 'Crítica' };
 
-function fireBadge(priority) {
-  if (!priority) return '';
-  const c = colorsMap[priority];
-  return `<div class="fire-badge" style="background-color:color-mix(in srgb, ${c} 18%, white); color:${c}">${fireSVG}</div>`;
+function prioClass(priority) {
+  return priority ? ' prio-fill prio-fill-' + priority : '';
+}
+
+// Ícone de alerta só na prioridade máxima (vermelho piscando)
+function prioIcon(priority) {
+  return priority === 5 ? `<span class="prio-alert">${alertSVG}</span>` : '';
 }
 
 const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const dayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const dayAbbr = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 
 const ICON_GRID = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`;
 const ICON_LIST = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>`;
@@ -23,7 +28,6 @@ let currentDate = new Date();
 let currentShoppingCat = null;
 let viewMode = localStorage.getItem('agendaViewMode') || 'list';
 let currentTab = 'calendar';
-let currentFormType = 'task';
 let currentSheetDate = null;
 let deferredPrompt = null;
 
@@ -260,8 +264,8 @@ function toggleCollapse(id) {
 
 // ===================== FAB ===================== //
 function onFabClick() {
-  if (currentTab === 'calendar') openAddRecordModal(todayISO(), 'task');
-  else if (currentTab === 'tasks') openTaskModal(null, null);
+  if (currentTab === 'calendar') openTaskModal(null, todayISO());
+  else if (currentTab === 'tasks') openTaskModal(null, todayISO());
   else if (currentTab === 'projects') openModal('projectModal');
   else if (currentTab === 'recurring') openRecurringModal(null);
 }
@@ -357,8 +361,11 @@ function getDayTags(dateStr, shift) {
     .filter((t) => taskOccursOn(t, dateStr) && !t.done)
     .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || (b.priority || 0) - (a.priority || 0))
     .forEach((t) => {
-      const color = t.priority ? colorsMap[t.priority] : 'var(--text-muted)';
-      tags.push({ label: (t.time ? t.time + ' ' : '') + t.title, cls: 'day-tag-task', style: `background-color:color-mix(in srgb, ${color} 18%, white); color:${color}` });
+      tags.push({
+        label: (t.time ? t.time + ' ' : '') + t.title,
+        cls: 'day-tag-task' + prioClass(t.priority),
+        icon: prioIcon(t.priority),
+      });
     });
 
   return tags;
@@ -380,13 +387,16 @@ function createDayCard(year, month, day, isNextMonth) {
     const overflow = tags.length > 5;
     const visibleTags = overflow ? tags.slice(0, 4) : tags;
     visibleTags.forEach((tag) => {
-      tagsHtml += `<div class="day-tag ${tag.cls}" style="${tag.style || ''}">${escapeHtml(tag.label)}</div>`;
+      tagsHtml += `<div class="day-tag ${tag.cls}" style="${tag.style || ''}">${tag.icon || ''}<span class="day-tag-text">${escapeHtml(tag.label)}</span></div>`;
     });
     if (overflow) tagsHtml += `<div class="day-tag day-tag-more">+${tags.length - 4} eventos</div>`;
     tagsHtml += '</div>';
 
     card.innerHTML = `
-      <div class="day-header"><div class="day-info"><span class="day-number">${pad(day)}</span></div></div>
+      <div class="day-header">
+        <div class="day-info"><span class="day-number">${pad(day)}</span></div>
+        <span class="day-weekday">${dayAbbr[dateObj.getDay()]}</span>
+      </div>
       ${tagsHtml}
     `;
     card.onclick = () => openDaySheet(dateStr);
@@ -440,15 +450,15 @@ function renderDayBody(dateStr, shift) {
   if (dayTasks.length) {
     html += '<div class="event-list">';
     dayTasks.forEach((t) => {
-      const fire = fireBadge(t.priority);
       const range = t.endDate && t.endDate !== t.date ? `<span class="event-obs">${formatDateBR(t.date)} até ${formatDateBR(t.endDate)}</span>` : '';
       const actions = t.done
         ? `<button onclick="event.stopPropagation(); reopenTask('${t.id}')">↩ Reabrir</button>`
-        : `<button onclick="event.stopPropagation(); completeTask('${t.id}')">✓ Concluir</button>
-           <button onclick="event.stopPropagation(); sendToBacklog('${t.id}')">↩ Sem data</button>`;
+        : `<button onclick="event.stopPropagation(); completeTask('${t.id}')">✓</button>
+           <button onclick="event.stopPropagation(); openTaskModal('${t.id}')">✏️</button>
+           <button onclick="event.stopPropagation(); sendToBacklog('${t.id}')">↩</button>`;
       html += `
-        <div class="event-item ${t.done ? 'done' : ''}">
-          ${fire}
+        <div class="event-item ${t.done ? 'done' : ''}${t.done ? '' : prioClass(t.priority)}">
+          ${t.done ? '' : prioIcon(t.priority)}
           <div class="event-details">
             <span class="event-title">${t.time ? `<span class="event-time">${t.time}</span> ` : ''}${escapeHtml(t.title)}</span>
             ${t.obs ? `<span class="event-obs">${escapeHtml(t.obs)}</span>` : ''}
@@ -480,72 +490,27 @@ function openDaySheet(dateStr) {
 
 function openAddRecordForDay(type) {
   closeModals();
-  openAddRecordModal(currentSheetDate, type);
+  if (type === 'abono') openAbonoModal(currentSheetDate);
+  else openTaskModal(null, currentSheetDate);
 }
 
 function openAbonoForDate(dateStr) {
-  openAddRecordModal(dateStr, 'abono');
+  openAbonoModal(dateStr);
 }
 
-// ===================== Modal: Adicionar Registro ===================== //
-function switchFormType(type) {
-  currentFormType = type;
-  $('#btnTypeTask').classList.toggle('active', type === 'task');
-  $('#btnTypeAbono').classList.toggle('active', type === 'abono');
-  $('#formTask').classList.toggle('hidden', type !== 'task');
-  $('#formAbono').classList.toggle('hidden', type !== 'abono');
-}
-
-function openAddRecordModal(dateStr, defaultType) {
+// ===================== Modal: Abono ===================== //
+function openAbonoModal(dateStr) {
   $('#inputDate').value = isoToBR(dateStr);
-  switchFormType(defaultType || 'task');
-
-  $('#taskNotify').checked = true;
-  $('#taskEndDate').value = '';
-  $('#taskTime').value = '';
   $('#btnDeleteAbono').classList.toggle('hidden', !state.abonos[dateStr]);
-
-  openModal('addRecordModal');
+  openModal('abonoModal');
 }
 
-async function saveRecord() {
+async function saveAbono() {
   const dateStr = brToISO($('#inputDate').value);
   if (!dateStr) return alert('Data inválida. Use o formato dd/mm/aaaa.');
-
-  if (currentFormType === 'abono') {
-    if (getCycleIndex(dateStr) !== 0) return alert('Abono só pode ser marcado em um dia de TRABALHO.');
-    await api(`/api/abonos/${dateStr}`, 'PUT');
-    state.abonos[dateStr] = true;
-  } else {
-    const title = $('#taskTitle').value.trim();
-    if (!title) return alert('Dê um título à tarefa.');
-    const endBR = $('#taskEndDate').value.trim();
-    let endDate = null;
-    if (endBR) {
-      endDate = brToISO(endBR);
-      if (!endDate) return alert('Data final inválida. Use o formato dd/mm/aaaa.');
-      if (endDate < dateStr) return alert('A data final deve ser igual ou depois da data inicial.');
-    }
-    const timeBR = $('#taskTime').value.trim();
-    let time = null;
-    if (timeBR) {
-      time = parseTime24(timeBR);
-      if (!time) return alert('Horário inválido. Use o formato 24h, ex: 08:00 ou 23:59.');
-    }
-    const priorityVal = $('#taskPriority').value;
-    const priority = priorityVal ? parseInt(priorityVal, 10) : null;
-    const obs = $('#taskObs').value.trim() || null;
-    const notify = $('#taskNotify').checked;
-    if (notify) ensureNotificationPermission();
-    const created = await api('/api/tasks', 'POST', { title, date: dateStr, endDate, time, priority, obs, notify });
-    state.tasks.push(created);
-    $('#taskTitle').value = '';
-    $('#taskObs').value = '';
-    $('#taskPriority').value = '';
-    $('#taskEndDate').value = '';
-    $('#taskTime').value = '';
-  }
-
+  if (getCycleIndex(dateStr) !== 0) return alert('Abono só pode ser marcado em um dia de TRABALHO.');
+  await api(`/api/abonos/${dateStr}`, 'PUT');
+  state.abonos[dateStr] = true;
   closeModals();
   renderAll();
 }
@@ -618,17 +583,16 @@ function renderTaskList(containerId, items, context) {
 }
 
 function taskListItemHtml(t, context) {
-  const fire = fireBadge(t.priority);
-
   const metaParts = [];
   if (t.date) metaParts.push(formatDateBR(t.date) + (t.endDate && t.endDate !== t.date ? ' até ' + formatDateBR(t.endDate) : ''));
   if (t.time) metaParts.push('⏰ ' + t.time);
+  if (t.priority) metaParts.push(PRIORITY_LABELS[t.priority]);
   if (t.obs) metaParts.push(escapeHtml(t.obs));
 
   let actions;
   if (context === 'upcoming') {
     actions = `
-      <button class="icon-btn" title="Concluir" onclick="completeTask('${t.id}')">✓</button>
+      <button class="icon-btn" title="Editar" onclick="openTaskModal('${t.id}')">✏️</button>
       <button class="icon-btn" title="Sem data" onclick="sendToBacklog('${t.id}')">↩</button>`;
   } else if (context === 'backlog') {
     actions = `
@@ -640,13 +604,14 @@ function taskListItemHtml(t, context) {
       <button class="icon-btn" title="Excluir" onclick="confirmDeleteTask('${t.id}')">🗑</button>`;
   }
 
-  const meta = (fire || metaParts.length)
-    ? `<div class="item-meta">${fire}${metaParts.map((m) => `<span>${m}</span>`).join(' · ')}</div>`
+  const meta = metaParts.length
+    ? `<div class="item-meta">${metaParts.map((m) => `<span>${m}</span>`).join(' · ')}</div>`
     : '';
 
   return `
-    <div class="list-item ${t.done ? 'done' : ''}">
+    <div class="list-item ${t.done ? 'done' : ''}${t.done ? '' : prioClass(t.priority)}">
       <button class="check-circle" onclick="${t.done ? `reopenTask('${t.id}')` : `completeTask('${t.id}')`}">${t.done ? '✓' : ''}</button>
+      ${t.done ? '' : prioIcon(t.priority)}
       <div class="item-content">
         <div class="item-title">${escapeHtml(t.title)}</div>
         ${meta}
@@ -656,18 +621,111 @@ function taskListItemHtml(t, context) {
   `;
 }
 
+// ---- Seletor de horário (24h com referência AM/PM) ---- //
+function hourMeridiem(h) {
+  if (h === 0) return '12 AM';
+  if (h < 12) return h + ' AM';
+  if (h === 12) return '12 PM';
+  return (h - 12) + ' PM';
+}
+
+const QUICK_MINUTES = ['00', '10', '15', '20', '30', '40', '45', '50'];
+
+function buildTaskPickers() {
+  const hourGrid = $('#hourGrid');
+  hourGrid.innerHTML = Array.from({ length: 24 }, (_, h) => `
+    <button type="button" class="hour-btn" data-hour="${pad(h)}" onclick="pickHour('${pad(h)}')">
+      <span class="hour-main">${pad(h)}h</span>
+      <span class="hour-sub">${hourMeridiem(h)}</span>
+    </button>`).join('');
+
+  $('#minuteRow').innerHTML = QUICK_MINUTES
+    .map((m) => `<button type="button" class="minute-btn" data-min="${m}" onclick="pickMinute('${m}')">:${m}</button>`)
+    .join('');
+
+  $('#prioRow').innerHTML = `
+    <button type="button" class="prio-btn prio-btn-0" data-prio="" onclick="pickPriority('')">Nenhuma</button>
+    ${[1, 2, 3, 4, 5].map((p) => `
+      <button type="button" class="prio-btn prio-fill prio-fill-${p}" data-prio="${p}" onclick="pickPriority(${p})">
+        ${p === 5 ? alertSVG : ''}<span>${PRIORITY_LABELS[p]}</span>
+      </button>`).join('')}
+  `;
+}
+
+function currentTimeParts() {
+  const m = $('#taskModalTime').value.match(/^(\d{1,2}):?(\d{0,2})$/);
+  if (!m) return { h: null, min: null };
+  return { h: m[1].length ? pad(+m[1]) : null, min: m[2] && m[2].length === 2 ? m[2] : null };
+}
+
+function pickHour(h) {
+  const { min } = currentTimeParts();
+  $('#taskModalTime').value = `${h}:${min || '00'}`;
+  syncTimePicker();
+}
+
+function pickMinute(min) {
+  const { h } = currentTimeParts();
+  $('#taskModalTime').value = `${h || pad(new Date().getHours())}:${min}`;
+  syncTimePicker();
+}
+
+function clearTaskTime() {
+  $('#taskModalTime').value = '';
+  syncTimePicker();
+}
+
+function syncTimePicker() {
+  const { h, min } = currentTimeParts();
+  document.querySelectorAll('#hourGrid .hour-btn').forEach((b) => b.classList.toggle('active', b.dataset.hour === h));
+  document.querySelectorAll('#minuteRow .minute-btn').forEach((b) => b.classList.toggle('active', b.dataset.min === min));
+}
+
+// ---- Atalhos de data e prioridade ---- //
+function setTaskDateValue(br) {
+  $('#taskModalDate').value = br;
+}
+
+function setTaskDateOffset(n) {
+  setTaskDateValue(isoToBR(addDays(todayISO(), n)));
+}
+
+function pickPriority(p) {
+  $('#taskModalPriority').value = p === '' ? '' : String(p);
+  syncPriorityPicker();
+}
+
+function syncPriorityPicker() {
+  const cur = $('#taskModalPriority').value;
+  document.querySelectorAll('#prioRow .prio-btn').forEach((b) => b.classList.toggle('active', b.dataset.prio === cur));
+}
+
+function toggleTaskAdvanced(forceOpen) {
+  const adv = $('#taskAdvanced');
+  const open = forceOpen === undefined ? adv.classList.contains('hidden') : forceOpen;
+  adv.classList.toggle('hidden', !open);
+  $('#taskAdvancedBtn').classList.toggle('open', open);
+}
+
 function openTaskModal(id, defaultDate) {
   const task = id ? state.tasks.find((t) => t.id === id) : null;
   $('#taskModalTitle').textContent = task ? 'Editar Tarefa' : 'Nova Tarefa';
   $('#taskModalId').value = task ? task.id : '';
   $('#taskModalTitleInput').value = task ? task.title : '';
-  $('#taskModalDate').value = task ? isoToBR(task.date) : isoToBR(defaultDate);
+  $('#taskModalDate').value = task ? isoToBR(task.date) : isoToBR(defaultDate || todayISO());
   $('#taskModalEndDate').value = task ? isoToBR(task.endDate) : '';
   $('#taskModalTime').value = task ? (task.time || '') : '';
   $('#taskModalPriority').value = task && task.priority ? String(task.priority) : '';
   $('#taskModalObs').value = task ? (task.obs || '') : '';
   $('#taskModalNotify').checked = task ? !!task.notify : true;
+
+  syncTimePicker();
+  syncPriorityPicker();
+  // Abre as opções extras só quando a tarefa já usa alguma delas
+  toggleTaskAdvanced(!!(task && (task.endDate || task.obs)));
+
   openModal('taskModal');
+  setTimeout(() => $('#taskModalTitleInput').focus(), 120);
 }
 
 async function saveTaskModal() {
@@ -1166,6 +1224,7 @@ async function onInstallClick() {
 
 // ===================== Init ===================== //
 (function init() {
+  buildTaskPickers();
   if (getToken()) boot();
   registerServiceWorker();
   setupInstallPrompt();
