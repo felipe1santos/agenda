@@ -1302,10 +1302,21 @@ function confirmBulkDeleteTasks(scope) {
 
 // ===================== Projetos ===================== //
 function renderProjects() {
+  // Guarda o que estava digitado nos campos "+ etapa" (e o foco) para não
+  // perder o texto quando outro cartão atualiza a lista
+  const typed = {};
+  document.querySelectorAll('#panel-projects .step-input').forEach((el) => { if (el.value) typed[el.dataset.pid] = el.value; });
+  const focusedPid = document.activeElement && document.activeElement.classList.contains('step-input') ? document.activeElement.dataset.pid : null;
+
   const active = state.projects.filter((p) => !p.done);
   const done = state.projects.filter((p) => p.done);
   renderProjectList('projectsActive', active);
   renderProjectList('projectsDoneWrap', done);
+
+  document.querySelectorAll('#panel-projects .step-input').forEach((el) => {
+    if (typed[el.dataset.pid]) el.value = typed[el.dataset.pid];
+    if (el.dataset.pid === focusedPid) el.focus();
+  });
 }
 
 function renderProjectList(containerId, items) {
@@ -1346,7 +1357,7 @@ function projectCardHtml(p) {
       <div class="progress-label">${doneCount}/${total} etapas</div>
       <div class="step-list">${stepsHtml}</div>
       <div class="add-step-row">
-        <input type="text" class="form-control" placeholder="+ etapa" onkeydown="if(event.key==='Enter') addStep('${p.id}', this)">
+        <input type="text" class="form-control step-input" data-pid="${p.id}" placeholder="+ etapa" onkeydown="if(event.key==='Enter') addStep('${p.id}', this)">
         <button class="btn-add" onclick="addStep('${p.id}', this.previousElementSibling)">+</button>
       </div>
     </div>
@@ -1358,13 +1369,21 @@ function replaceProject(updated) {
   if (idx >= 0) state.projects[idx] = updated; else state.projects.push(updated);
 }
 
+// Lê e limpa o campo na hora: dá para digitar a próxima etapa enquanto a
+// anterior salva. A trava é por texto (evita só o envio duplicado do mesmo).
 function addStep(projectId, inputEl) {
-  return runOnce('step-add:' + projectId, null, () => doAddStep(projectId, inputEl));
-}
-
-async function doAddStep(projectId, inputEl) {
   const title = inputEl.value.trim();
   if (!title) return;
+  inputEl.value = '';
+  return runOnce('step-add:' + projectId + ':' + title, null, () => doAddStep(projectId, title))
+    .catch((e) => {
+      const input = document.querySelector(`#panel-projects .step-input[data-pid="${projectId}"]`);
+      if (input && !input.value) input.value = title; // devolve o texto se falhar
+      throw e;
+    });
+}
+
+async function doAddStep(projectId, title) {
   const updated = await api(`/api/projects/${projectId}/steps`, 'POST', { title });
   replaceProject(updated);
   renderAll();
@@ -1442,6 +1461,17 @@ function catName(id) {
 
 function renderShopping() {
   const el = $('#shoppingView');
+  // Mantém o texto (e o foco) do campo de novo item entre re-renderizações
+  const prevInput = $('#shoppingItemInput');
+  const typed = prevInput ? prevInput.value : '';
+  const hadFocus = prevInput && document.activeElement === prevInput;
+  renderShoppingView(el);
+  const input = $('#shoppingItemInput');
+  if (input && typed) input.value = typed;
+  if (input && hadFocus) input.focus();
+}
+
+function renderShoppingView(el) {
   if (currentShoppingCat && !state.shoppingCategories.some((c) => c.id === currentShoppingCat)) {
     currentShoppingCat = null;
   }
@@ -1536,20 +1566,27 @@ function deleteShoppingCategory(id) {
   });
 }
 
+// Lê e limpa o campo na hora: dá para digitar o próximo item enquanto o
+// anterior salva. A trava é por texto (evita só o envio duplicado do mesmo).
 function addShoppingItem(category) {
-  return runOnce('shop-add:' + category, null, () => doAddShoppingItem(category));
-}
-
-async function doAddShoppingItem(category) {
   const input = $('#shoppingItemInput');
   const name = input.value.trim();
   if (!name) return;
+  input.value = '';
+  input.focus();
+  return runOnce('shop-add:' + category + ':' + name, null, () => doAddShoppingItem(category, name))
+    .catch((e) => {
+      const cur = $('#shoppingItemInput');
+      if (cur && !cur.value) cur.value = name; // devolve o texto se falhar
+      throw e;
+    });
+}
+
+async function doAddShoppingItem(category, name) {
   const created = await api('/api/shopping', 'POST', { category, name });
   if (!state.shopping[category]) state.shopping[category] = [];
   state.shopping[category].push(created);
-  input.value = '';
   renderShopping();
-  $('#shoppingItemInput').focus();
 }
 
 function toggleShoppingItem(id, done) {

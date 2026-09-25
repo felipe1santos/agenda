@@ -12,4 +12,4 @@ ENV DB_PATH=/app/data/agenda.db
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "--disable-warning=ExperimentalWarning", "server.js"]

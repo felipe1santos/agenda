@@ -5,7 +5,7 @@
   "description": "Agenda pessoal de escala, tarefas, projetos e compras",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --disable-warning=ExperimentalWarning server.js",
     "generate-icons": "node scripts/generate-icons.js"
   },
   "engines": {
