@@ -382,7 +382,8 @@ function renderCalendar(scrollToToday) {
   const today = new Date();
   $('#currentMonthYear').classList.toggle('month-current', year === today.getFullYear() && month === today.getMonth());
   const t = new Date();
-  $('#todayBadge').textContent = `Hoje, ${t.getDate()} de ${monthNames[t.getMonth()]}`;
+  // Versão curta ("Hoje, 24 Set") aparece em telas estreitas via CSS
+  $('#todayBadge').innerHTML = `Hoje, ${t.getDate()} <span class="badge-long">de ${monthNames[t.getMonth()]}</span><span class="badge-short">${monthNames[t.getMonth()].slice(0, 3)}</span>`;
 
   const calendarEl = $('#calendar');
   calendarEl.innerHTML = '';

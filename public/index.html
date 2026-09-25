@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Agenda de Escala</title>
     <meta name="theme-color" content="#3b82f6">
     <link rel="manifest" href="/manifest.json">
@@ -38,9 +38,6 @@
         <div class="header-actions">
             <button class="btn-icon" id="btnViewToggle" onclick="toggleViewMode()" title="Mudar Visualização">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-            </button>
-            <button class="btn-icon hidden" id="btnInstall" onclick="onInstallClick()" title="Instalar aplicativo">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </button>
             <button class="btn-icon" onclick="openSettingsMenu()" title="Ajustes">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -326,6 +323,7 @@
             <button class="menu-item" onclick="openFromMenu('vacation')"><span class="menu-icon">✈️</span><span class="menu-text"><strong>Férias</strong><small>Período inteiro de folga</small></span></button>
             <button class="menu-item" onclick="openFromMenu('specials')"><span class="menu-icon">⭐</span><span class="menu-text"><strong>Dias Especiais</strong><small>Ver e excluir especiais</small></span></button>
             <button class="menu-item" onclick="openFromMenu('config')"><span class="menu-icon">📅</span><span class="menu-text"><strong>Configurar Escala</strong><small>Dia de trabalho e dias de folga</small></span></button>
+            <button class="menu-item hidden" id="btnInstall" onclick="closeModal('settingsModal'); onInstallClick()"><span class="menu-icon">📲</span><span class="menu-text"><strong>Instalar aplicativo</strong><small>Adicionar à tela inicial</small></span></button>
             <button class="menu-item" onclick="logout()"><span class="menu-icon">🚪</span><span class="menu-text"><strong>Sair da conta</strong></span></button>
         </div>
     </div>

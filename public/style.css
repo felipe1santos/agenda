@@ -23,19 +23,22 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 
-body, html { height: 100vh; background-color: var(--bg-color); color: var(--text-main); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+/* A página em si nunca rola: só a área de conteúdo do app. Evita que a barra
+   inferior "suba" junto com a rolagem e deixe um vão branco no celular. */
+html, body { height: 100%; background-color: var(--bg-color); color: var(--text-main); -webkit-font-smoothing: antialiased; overflow: hidden; overscroll-behavior: none; }
 
 .hidden { display: none !important; }
 
 /* ===================== LOGIN ===================== */
-.login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.login-screen { position: fixed; inset: 0; overflow-y: auto; min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .login-card { background: var(--card-bg); border-radius: 16px; padding: 32px 24px; width: 100%; max-width: 360px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 12px; text-align: center; }
 .login-card h1 { font-size: 20px; margin-bottom: 4px; }
 .login-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
 .login-error { color: var(--cor-especial); font-size: 13px; font-weight: bold; }
 
 /* ===================== APP SHELL ===================== */
-#app { max-width: 480px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; position: relative; }
+/* Preso à viewport visível (dvh acompanha a barra do navegador do celular) */
+#app { position: fixed; top: 0; bottom: 0; left: 0; right: 0; max-width: 480px; margin: 0 auto; height: 100%; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 
 @media (min-width: 768px) {
     #app { max-width: 900px; }
@@ -44,17 +47,31 @@ body, html { height: 100vh; background-color: var(--bg-color); color: var(--text
 /* Header */
 header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; border-bottom: 1px solid var(--border-color); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .header-left { display: flex; align-items: center; flex: 1; min-width: 0; }
-.month-selector { display: flex; align-items: center; gap: 12px; }
+.month-selector { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .month-selector button { background: none; border: none; font-size: 20px; color: var(--primary); padding: 5px; cursor: pointer; }
-.month-selector h2, .tab-title { font-size: 16px; text-transform: capitalize; }
+.month-selector h2, .tab-title { font-size: 16px; text-transform: capitalize; white-space: nowrap; }
 .month-selector h2.month-current { background-color: #fef08a; padding: 2px 10px; border-radius: 6px; }
-.today-badge { font-size: 12px; font-weight: bold; color: var(--primary); background-color: color-mix(in srgb, var(--primary) 12%, white); padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+.today-badge { font-size: 12px; font-weight: bold; color: var(--primary); background-color: color-mix(in srgb, var(--primary) 12%, white); padding: 3px 9px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+.badge-short { display: none; }
+
+/* Celular: cabeçalho do calendário compacto numa linha só */
+@media (max-width: 520px) {
+    header { padding: 10px 10px; }
+    .month-selector { gap: 4px; }
+    .month-selector button { padding: 4px 3px; font-size: 18px; }
+    .month-selector h2 { font-size: 15px; }
+    .month-selector h2.month-current { padding: 2px 7px; }
+    .today-badge { padding: 3px 7px; margin-left: 2px; }
+    .badge-long { display: none; }
+    .badge-short { display: inline; }
+    .header-actions { gap: 2px; }
+}
 .tab-title { font-size: 18px; font-weight: bold; }
 .header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .btn-icon { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 6px; min-width: 36px; min-height: 36px; }
 
 /* Container Principal */
-.main-content { flex-grow: 1; overflow-y: auto; padding-bottom: 96px; display: flex; flex-direction: column; }
+.main-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: 88px; display: flex; flex-direction: column; }
 .tab-panel { display: flex; flex-direction: column; flex: 1; }
 
 /* Cabeçalho de Dias da Semana (Modo Grade) */
@@ -104,7 +121,7 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 .event-actions button { border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 6px; font-size: 12px; padding: 5px 8px; cursor: pointer; color: var(--text-muted); }
 
 /* ===================== MODO GRADE (CARDS MAIORES) ===================== */
-.main-content.mode-grid { padding-bottom: 96px; }
+.main-content.mode-grid { padding-bottom: 88px; }
 .mode-grid .week-days-header { display: none; }
 .mode-grid .days-container {
     padding: 4px;
@@ -220,17 +237,18 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 .folder-count { font-size: 12px; color: var(--text-muted); }
 
 /* ===================== BOTTOM NAV ===================== */
-.bottom-nav { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: var(--card-bg); border-top: 1px solid var(--border-color); display: flex; z-index: 20; }
+/* Faz parte do fluxo flex (não absolute): sempre colada no fundo */
+.bottom-nav { flex-shrink: 0; height: calc(64px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--card-bg); border-top: 1px solid var(--border-color); display: flex; z-index: 20; }
 .nav-btn { flex: 1; background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 6px 2px; }
 .nav-btn.active { color: var(--primary); }
 
 /* Floating Action Button (FAB) */
-.fab { position: absolute; bottom: 78px; right: 20px; width: 56px; height: 56px; background: var(--primary); color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 28px; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); border: none; cursor: pointer; z-index: 20; }
+.fab { position: absolute; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); right: 20px; width: 56px; height: 56px; background: var(--primary); color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 28px; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); border: none; cursor: pointer; z-index: 20; }
 
 /* ===================== MODALS ===================== */
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: flex-end; z-index: 30; }
+.modal-overlay { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; overscroll-behavior: contain; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: flex-end; z-index: 30; }
 .modal-overlay.active { display: flex; }
-.modal-content { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 24px; animation: slideUp 0.3s ease-out; max-height: 90vh; overflow-y: auto; }
+.modal-content { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 24px; animation: slideUp 0.3s ease-out; max-height: 90vh; max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -338,8 +356,8 @@ button:disabled, .is-busy { opacity: 0.6; cursor: wait; pointer-events: none; }
 .hour-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .hour-btn.active .hour-sub { color: rgba(255,255,255,0.85); }
 
-.minute-row { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
-.minute-btn { flex: 1; min-width: 46px; padding: 9px 4px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; color: var(--text-main); }
+.minute-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
+.minute-btn { min-width: 0; padding: 9px 4px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; color: var(--text-main); }
 .minute-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 
 .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -358,3 +376,8 @@ button:disabled, .is-busy { opacity: 0.6; cursor: wait; pointer-events: none; }
 #taskAdvanced { padding-top: 14px; }
 
 .btn-hero { padding: 16px; font-size: 17px; border-radius: 12px; }
+
+/* Telas bem estreitas: o mês destacado já indica "hoje" */
+@media (max-width: 340px) {
+    .today-badge { display: none; }
+}
