@@ -349,16 +349,7 @@ button:disabled, .is-busy { opacity: 0.6; cursor: wait; pointer-events: none; }
 .time-hero::placeholder, .date-hero::placeholder { color: #cbd5e1; }
 .chip-clear { background: none; border: none; color: var(--text-muted); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 4px; flex-shrink: 0; }
 
-.hour-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
-.hour-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 7px 2px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 9px; cursor: pointer; color: var(--text-main); }
-.hour-main { font-size: 14px; font-weight: 700; line-height: 1.1; }
-.hour-sub { font-size: 9px; color: var(--text-muted); letter-spacing: 0.02em; }
-.hour-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
-.hour-btn.active .hour-sub { color: rgba(255,255,255,0.85); }
 
-.minute-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
-.minute-btn { min-width: 0; padding: 9px 4px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; color: var(--text-main); }
-.minute-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 
 .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { padding: 9px 12px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-main); }
@@ -381,3 +372,27 @@ button:disabled, .is-busy { opacity: 0.6; cursor: wait; pointer-events: none; }
 @media (max-width: 340px) {
     .today-badge { display: none; }
 }
+
+/* Foto e endereço da tarefa */
+.photo-preview { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.photo-preview img { max-width: 100%; max-height: 220px; border-radius: 10px; border: 1px solid var(--border-color); object-fit: cover; }
+.photo-full { display: block; width: 100%; height: auto; border-radius: 10px; }
+.task-link { color: var(--primary); font-weight: 600; text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; font-size: inherit; word-break: break-word; text-align: left; }
+.prio-fill .task-link { color: inherit; }
+.form-group .opt { font-size: 12px; opacity: 0.75; }
+
+/* Relógio analógico do horário */
+.clock-modes { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 4px; }
+.clock-mode { min-width: 72px; padding: 6px 10px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 12px; font-size: 30px; font-weight: 800; color: var(--text-muted); cursor: pointer; }
+.clock-mode.active { background: color-mix(in srgb, var(--primary) 14%, white); border-color: var(--primary); color: var(--primary); }
+.clock-sep { font-size: 30px; font-weight: 800; color: var(--text-muted); }
+.clock-hint { text-align: center; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+.clock-face { display: block; width: 100%; max-width: 280px; margin: 0 auto; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.clock-bg { fill: var(--card-bg); stroke: var(--border-color); stroke-width: 2; }
+.clock-hand { stroke: var(--primary); stroke-width: 3; stroke-linecap: round; }
+.clock-center { fill: var(--primary); }
+.clock-knob { fill: var(--primary); }
+.clock-num { font-size: 17px; font-weight: 700; fill: var(--text-main); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.clock-num.inner { font-size: 13px; font-weight: 600; fill: var(--text-muted); }
+.clock-num.active { fill: #fff; }
+.task-extras { display: flex; flex-wrap: wrap; gap: 4px 12px; }

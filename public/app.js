@@ -534,6 +534,7 @@ function renderDayBody(dateStr, shift) {
           <div class="event-details">
             <span class="event-title">${t.time ? `<span class="event-time">${t.time}</span> ` : ''}${escapeHtml(t.title)}</span>
             ${t.obs ? `<span class="event-obs">${escapeHtml(t.obs)}</span>` : ''}
+            ${taskExtrasHtml(t) ? `<span class="event-obs task-extras">${taskExtrasHtml(t)}</span>` : ''}
             ${range}
           </div>
           <div class="event-actions">${actions}</div>
@@ -753,6 +754,7 @@ function taskListItemHtml(t, context) {
   if (t.time) metaParts.push('⏰ ' + t.time);
   if (t.priority) metaParts.push(PRIORITY_LABELS[t.priority]);
   if (t.obs) metaParts.push(escapeHtml(t.obs));
+  const extras = taskExtrasHtml(t);
 
   let actions;
   if (context === 'upcoming') {
@@ -780,33 +782,36 @@ function taskListItemHtml(t, context) {
       <div class="item-content">
         <div class="item-title">${escapeHtml(t.title)}</div>
         ${meta}
+        ${extras ? `<div class="item-meta">${extras}</div>` : ''}
       </div>
       <div class="item-actions">${actions}</div>
     </div>
   `;
 }
 
-// ---- Seletor de horário (24h com referência AM/PM) ---- //
-function hourMeridiem(h) {
-  if (h === 0) return '12 AM';
-  if (h < 12) return h + ' AM';
-  if (h === 12) return '12 PM';
-  return (h - 12) + ' PM';
-}
-
-const QUICK_MINUTES = ['00', '10', '15', '20', '30', '40', '45', '50'];
+// ---- Relógio analógico para o horário ---- //
+// Modo "hora": anel de fora 1–12, anel de dentro 13–23 e 00. Ao soltar o dedo
+// passa sozinho para o modo "minuto" (de 5 em 5). Tocar ou arrastar funciona.
+const CLOCK = { size: 280, c: 140, rOuter: 110, rInner: 72, knob: 20 };
+let clockMode = 'hour';
+let clockDragging = false;
 
 function buildTaskPickers() {
-  const hourGrid = $('#hourGrid');
-  hourGrid.innerHTML = Array.from({ length: 24 }, (_, h) => `
-    <button type="button" class="hour-btn" data-hour="${pad(h)}" onclick="pickHour('${pad(h)}')">
-      <span class="hour-main">${pad(h)}h</span>
-      <span class="hour-sub">${hourMeridiem(h)}</span>
-    </button>`).join('');
-
-  $('#minuteRow').innerHTML = QUICK_MINUTES
-    .map((m) => `<button type="button" class="minute-btn" data-min="${m}" onclick="pickMinute('${m}')">:${m}</button>`)
-    .join('');
+  const face = $('#clockFace');
+  face.addEventListener('pointerdown', (e) => {
+    clockDragging = true;
+    face.setPointerCapture(e.pointerId);
+    applyClockPointer(e);
+  });
+  face.addEventListener('pointermove', (e) => { if (clockDragging) applyClockPointer(e); });
+  const end = (e) => {
+    if (!clockDragging) return;
+    clockDragging = false;
+    applyClockPointer(e);
+    if (clockMode === 'hour') setTimeout(() => setClockMode('minute'), 220);
+  };
+  face.addEventListener('pointerup', end);
+  face.addEventListener('pointercancel', () => { clockDragging = false; });
 
   $('#prioRow').innerHTML = `
     <button type="button" class="prio-btn prio-btn-0" data-prio="" onclick="pickPriority('')">Nenhuma</button>
@@ -817,33 +822,102 @@ function buildTaskPickers() {
   `;
 }
 
+function clockPoint(step, r) {
+  const a = (step / 12) * 2 * Math.PI - Math.PI / 2;
+  return [CLOCK.c + r * Math.cos(a), CLOCK.c + r * Math.sin(a)];
+}
+
+function renderClock() {
+  const { h, min } = currentTimeParts();
+  const labels = [];
+  let hand = null;
+  let selected = null;
+
+  if (clockMode === 'hour') {
+    for (let i = 0; i < 12; i++) {
+      labels.push({ text: String(i === 0 ? 12 : i), value: i === 0 ? 12 : i, pos: clockPoint(i, CLOCK.rOuter), inner: false });
+      labels.push({ text: pad(i === 0 ? 0 : i + 12), value: i === 0 ? 0 : i + 12, pos: clockPoint(i, CLOCK.rInner), inner: true });
+    }
+    if (h != null) {
+      selected = +h;
+      const inner = selected === 0 || selected > 12;
+      hand = clockPoint(selected % 12, inner ? CLOCK.rInner : CLOCK.rOuter);
+    }
+  } else {
+    for (let i = 0; i < 12; i++) labels.push({ text: pad(i * 5), value: i * 5, pos: clockPoint(i, CLOCK.rOuter), inner: false });
+    if (min != null) {
+      selected = +min;
+      hand = clockPoint(selected / 5, CLOCK.rOuter);
+    }
+  }
+
+  const { c, knob } = CLOCK;
+  $('#clockFace').innerHTML = `
+    <circle cx="${c}" cy="${c}" r="${c - 2}" class="clock-bg"></circle>
+    ${hand ? `<line x1="${c}" y1="${c}" x2="${hand[0]}" y2="${hand[1]}" class="clock-hand"></line>
+      <circle cx="${c}" cy="${c}" r="4" class="clock-center"></circle>
+      <circle cx="${hand[0]}" cy="${hand[1]}" r="${knob}" class="clock-knob"></circle>` : ''}
+    ${labels.map((l) => `<text x="${l.pos[0]}" y="${l.pos[1]}" class="clock-num${l.inner ? ' inner' : ''}${l.value === selected ? ' active' : ''}">${l.text}</text>`).join('')}
+  `;
+
+  $('#clockModeHour').classList.toggle('active', clockMode === 'hour');
+  $('#clockModeMinute').classList.toggle('active', clockMode === 'minute');
+  $('#clockModeHour').textContent = h != null ? h : '--';
+  $('#clockModeMinute').textContent = min != null ? min : '--';
+}
+
+function applyClockPointer(e) {
+  const rect = $('#clockFace').getBoundingClientRect();
+  const scale = CLOCK.size / rect.width;
+  const x = (e.clientX - rect.left) * scale - CLOCK.c;
+  const y = (e.clientY - rect.top) * scale - CLOCK.c;
+  let angle = Math.atan2(y, x) + Math.PI / 2;
+  if (angle < 0) angle += 2 * Math.PI;
+  const step = Math.round((angle / (2 * Math.PI)) * 12) % 12;
+
+  if (clockMode === 'hour') {
+    const inner = Math.hypot(x, y) < (CLOCK.rOuter + CLOCK.rInner) / 2;
+    const hour = inner ? (step === 0 ? 0 : step + 12) : (step === 0 ? 12 : step);
+    pickHour(pad(hour));
+  } else {
+    pickMinute(pad(step * 5));
+  }
+}
+
+function setClockMode(mode) {
+  clockMode = mode;
+  renderClock();
+}
+
 function currentTimeParts() {
   const m = $('#taskModalTime').value.match(/^(\d{1,2}):?(\d{0,2})$/);
   if (!m) return { h: null, min: null };
-  return { h: m[1].length ? pad(+m[1]) : null, min: m[2] && m[2].length === 2 ? m[2] : null };
+  const h = m[1].length && +m[1] <= 23 ? pad(+m[1]) : null;
+  const min = m[2] && m[2].length === 2 && +m[2] <= 59 ? m[2] : null;
+  return { h, min };
 }
 
 function pickHour(h) {
   const { min } = currentTimeParts();
   $('#taskModalTime').value = `${h}:${min || '00'}`;
-  syncTimePicker();
+  renderClock();
 }
 
 function pickMinute(min) {
   const { h } = currentTimeParts();
   $('#taskModalTime').value = `${h || pad(new Date().getHours())}:${min}`;
-  syncTimePicker();
+  renderClock();
 }
 
 function clearTaskTime() {
   $('#taskModalTime').value = '';
-  syncTimePicker();
+  clockMode = 'hour';
+  renderClock();
 }
 
+// Chamado ao digitar o horário no campo
 function syncTimePicker() {
-  const { h, min } = currentTimeParts();
-  document.querySelectorAll('#hourGrid .hour-btn').forEach((b) => b.classList.toggle('active', b.dataset.hour === h));
-  document.querySelectorAll('#minuteRow .minute-btn').forEach((b) => b.classList.toggle('active', b.dataset.min === min));
+  renderClock();
 }
 
 // ---- Atalhos de data e prioridade ---- //
@@ -872,6 +946,87 @@ function toggleTaskAdvanced(forceOpen) {
   $('#taskAdvancedBtn').classList.toggle('open', open);
 }
 
+// ---- Foto da tarefa ---- //
+// Estado da foto no formulário aberto: nova (dataUrl), remover a atual, ou nada.
+let taskPhotoDraft = { dataUrl: null, remove: false, existing: false };
+const photoUrlCache = {};
+
+// Busca a foto com o token (um <img src> não manda o header de auth)
+async function loadTaskPhotoUrl(id) {
+  if (photoUrlCache[id]) return photoUrlCache[id];
+  const res = await fetch(`/api/tasks/${id}/photo`, { headers: { Authorization: 'Bearer ' + getToken() } });
+  if (!res.ok) throw new Error('Não foi possível carregar a foto.');
+  photoUrlCache[id] = URL.createObjectURL(await res.blob());
+  return photoUrlCache[id];
+}
+
+function forgetTaskPhoto(id) {
+  if (photoUrlCache[id]) URL.revokeObjectURL(photoUrlCache[id]);
+  delete photoUrlCache[id];
+}
+
+// Reduz no aparelho (máx. 1280px, JPEG) antes de enviar: foto de celular tem vários MB
+function resizeImageFile(file, maxSide = 1280, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Imagem inválida.')); };
+    img.src = url;
+  });
+}
+
+function showTaskPhotoPreview(src) {
+  $('#taskPhotoPreview').classList.toggle('hidden', !src);
+  if (src) $('#taskPhotoImg').src = src;
+  else $('#taskPhotoImg').removeAttribute('src');
+  $('#taskPhotoBtn').textContent = src ? '📷 Trocar foto' : '📷 Adicionar foto';
+}
+
+async function onTaskPhotoPicked(input) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  const dataUrl = await resizeImageFile(file);
+  taskPhotoDraft.dataUrl = dataUrl;
+  taskPhotoDraft.remove = false;
+  showTaskPhotoPreview(dataUrl);
+}
+
+function removeTaskPhoto() {
+  taskPhotoDraft.dataUrl = null;
+  taskPhotoDraft.remove = taskPhotoDraft.existing;
+  showTaskPhotoPreview(null);
+}
+
+async function openPhotoViewer(id) {
+  const task = state.tasks.find((t) => t.id === id);
+  $('#photoModalTitle').textContent = task ? task.title : 'Foto';
+  $('#photoModalImg').removeAttribute('src');
+  openModal('photoModal');
+  $('#photoModalImg').src = await loadTaskPhotoUrl(id);
+}
+
+function mapsUrl(address) {
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address);
+}
+
+// Link do endereço + botão da foto, usados na lista de tarefas e no calendário
+function taskExtrasHtml(t) {
+  let html = '';
+  if (t.address) html += `<a class="task-link" href="${mapsUrl(t.address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 ${escapeHtml(t.address)}</a>`;
+  if (t.hasPhoto) html += `<button type="button" class="task-link" onclick="event.stopPropagation(); openPhotoViewer('${t.id}')">📷 Ver foto</button>`;
+  return html;
+}
+
 // Id usado no POST de criação: o mesmo em todos os reenvios deste formulário,
 // então o servidor nunca cria a tarefa duas vezes.
 let taskDraftId = null;
@@ -887,12 +1042,22 @@ function openTaskModal(id, defaultDate) {
   $('#taskModalTime').value = task ? (task.time || '') : '';
   $('#taskModalPriority').value = task && task.priority ? String(task.priority) : '';
   $('#taskModalObs').value = task ? (task.obs || '') : '';
+  $('#taskModalAddress').value = task ? (task.address || '') : '';
   $('#taskModalNotify').checked = task ? !!task.notify : true;
 
-  syncTimePicker();
+  taskPhotoDraft = { dataUrl: null, remove: false, existing: !!(task && task.hasPhoto) };
+  showTaskPhotoPreview(null);
+  if (task && task.hasPhoto) {
+    loadTaskPhotoUrl(task.id).then((url) => {
+      if ($('#taskModalId').value === task.id && !taskPhotoDraft.dataUrl && !taskPhotoDraft.remove) showTaskPhotoPreview(url);
+    }).catch(() => {});
+  }
+
+  clockMode = 'hour';
+  renderClock();
   syncPriorityPicker();
   // Abre as opções extras só quando a tarefa já usa alguma delas
-  toggleTaskAdvanced(!!(task && (task.endDate || task.obs)));
+  toggleTaskAdvanced(!!(task && (task.endDate || task.obs || task.address || task.hasPhoto)));
 
   openModal('taskModal');
   setTimeout(() => $('#taskModalTitleInput').focus(), 120);
@@ -922,17 +1087,29 @@ async function doSaveTaskModal() {
   const priorityVal = $('#taskModalPriority').value;
   const priority = priorityVal ? parseInt(priorityVal, 10) : null;
   const obs = $('#taskModalObs').value.trim() || null;
+  const address = $('#taskModalAddress').value.trim() || null;
   const notify = $('#taskModalNotify').checked;
   if (notify) ensureNotificationPermission();
 
+  let saved;
   if (id) {
-    const updated = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, time, priority, obs, notify });
-    const idx = state.tasks.findIndex((t) => t.id === id);
-    state.tasks[idx] = updated;
+    saved = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, time, priority, obs, address, notify });
   } else {
-    const created = await api('/api/tasks', 'POST', { id: taskDraftId, title, date, endDate, time, priority, obs, notify });
-    if (!state.tasks.some((t) => t.id === created.id)) state.tasks.push(created);
+    saved = await api('/api/tasks', 'POST', { id: taskDraftId, title, date, endDate, time, priority, obs, address, notify });
   }
+
+  if (taskPhotoDraft.dataUrl) {
+    saved = await api(`/api/tasks/${saved.id}/photo`, 'PUT', { dataUrl: taskPhotoDraft.dataUrl });
+    forgetTaskPhoto(saved.id);
+    taskPhotoDraft.dataUrl = null;
+  } else if (taskPhotoDraft.remove) {
+    saved = await api(`/api/tasks/${saved.id}/photo`, 'DELETE');
+    forgetTaskPhoto(saved.id);
+    taskPhotoDraft.remove = false;
+  }
+
+  const idx = state.tasks.findIndex((t) => t.id === saved.id);
+  if (idx >= 0) state.tasks[idx] = saved; else state.tasks.push(saved);
 
   closeModal('taskModal');
   renderAll();

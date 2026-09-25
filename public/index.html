@@ -17,7 +17,9 @@
     <form id="loginForm" class="login-card">
         <h1>Agenda de Escala</h1>
         <p class="login-subtitle">Digite a senha de acesso</p>
-        <input type="password" id="loginPassword" class="form-control" placeholder="Senha" autocomplete="current-password" required>
+        <!-- usuário oculto: ajuda o gerenciador de senhas do celular a salvar/preencher -->
+        <input type="text" name="username" value="agenda" autocomplete="username" hidden>
+        <input type="password" name="password" id="loginPassword" class="form-control" placeholder="Senha" autocomplete="current-password" required>
         <p id="loginError" class="login-error hidden">Senha incorreta.</p>
         <button type="submit" class="btn-submit">Entrar</button>
     </form>
@@ -193,8 +195,13 @@
                 <input type="text" id="taskModalTime" class="time-hero" placeholder="--:--" inputmode="numeric" maxlength="5" oninput="maskTime24(this); syncTimePicker()">
                 <button type="button" class="chip-clear" onclick="clearTaskTime()">limpar</button>
             </div>
-            <div class="hour-grid" id="hourGrid"></div>
-            <div class="minute-row" id="minuteRow"></div>
+            <div class="clock-modes">
+                <button type="button" class="clock-mode active" id="clockModeHour" onclick="setClockMode('hour')">--</button>
+                <span class="clock-sep">:</span>
+                <button type="button" class="clock-mode" id="clockModeMinute" onclick="setClockMode('minute')">--</button>
+            </div>
+            <p class="clock-hint">Toque ou arraste: primeiro a hora, depois o minuto</p>
+            <svg id="clockFace" class="clock-face" viewBox="0 0 280 280" role="img" aria-label="Relógio para escolher o horário"></svg>
         </div>
 
         <div class="field-card">
@@ -225,6 +232,20 @@
             <div class="form-group">
                 <label>Observação</label>
                 <input type="text" id="taskModalObs" class="form-control" placeholder="Detalhes adicionais...">
+            </div>
+            <div class="form-group">
+                <label>📍 Endereço <span class="opt">opcional</span></label>
+                <input type="text" id="taskModalAddress" class="form-control" placeholder="Rua, número, bairro, cidade" autocomplete="street-address">
+                <small class="hint">Na tarefa vira um link que abre no mapa.</small>
+            </div>
+            <div class="form-group">
+                <label>📷 Foto <span class="opt">opcional</span></label>
+                <input type="file" id="taskModalPhotoInput" accept="image/*" hidden onchange="onTaskPhotoPicked(this)">
+                <div id="taskPhotoPreview" class="photo-preview hidden">
+                    <img id="taskPhotoImg" alt="Foto da tarefa">
+                    <button type="button" class="btn-danger-soft" onclick="removeTaskPhoto()">🗑 Remover foto</button>
+                </div>
+                <button type="button" class="btn-secondary" id="taskPhotoBtn" onclick="$('#taskModalPhotoInput').click()">📷 Adicionar foto</button>
             </div>
             <label class="checkbox-row"><input type="checkbox" id="taskModalNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
         </div>
@@ -391,6 +412,17 @@
             <button class="btn-secondary" style="flex:1;" onclick="cancelExit()">Cancelar</button>
             <button class="btn-submit" style="flex:1;" onclick="confirmExit()">OK</button>
         </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: VER FOTO ===================== -->
+<div class="modal-overlay" id="photoModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="photoModalTitle">Foto</h3>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <img id="photoModalImg" class="photo-full" alt="Foto da tarefa">
     </div>
 </div>
 

@@ -128,12 +128,27 @@ for (const stmt of [
   'ALTER TABLE project_steps ADD COLUMN obs TEXT',
   'ALTER TABLE tasks ADD COLUMN end_date TEXT',
   'ALTER TABLE tasks ADD COLUMN time TEXT',
+  'ALTER TABLE tasks ADD COLUMN address TEXT',
+  'ALTER TABLE tasks ADD COLUMN has_photo INTEGER NOT NULL DEFAULT 0',
 ]) {
   try { db.exec(stmt); } catch (e) { /* coluna já existe */ }
 }
 
 // ---------- Auth ----------
-const SERVER_SECRET = crypto.randomBytes(32).toString('hex');
+// Segredo persistido no volume de dados: o token salvo no celular continua
+// válido após deploy/restart (antes era aleatório a cada start e deslogava).
+// Trocar APP_PASSWORD invalida todos os tokens.
+function loadServerSecret() {
+  const file = path.join(path.dirname(DB_PATH), '.session-secret');
+  try {
+    const existing = fs.readFileSync(file, 'utf8').trim();
+    if (existing.length >= 32) return existing;
+  } catch (e) { /* primeiro start */ }
+  const secret = crypto.randomBytes(32).toString('hex');
+  fs.writeFileSync(file, secret, { mode: 0o600 });
+  return secret;
+}
+const SERVER_SECRET = loadServerSecret();
 const VALID_TOKEN = crypto.createHmac('sha256', SERVER_SECRET).update(APP_PASSWORD).digest('hex');
 
 function requireAuth(req, res, next) {
@@ -147,7 +162,8 @@ function requireAuth(req, res, next) {
 
 // ---------- App ----------
 const app = express();
-app.use(express.json());
+// Limite maior por causa das fotos das tarefas (já chegam reduzidas pelo cliente)
+app.use(express.json({ limit: '8mb' }));
 
 app.post('/api/login', (req, res) => {
   const { password } = req.body || {};
@@ -200,17 +216,7 @@ app.get('/api/state', (req, res) => {
     specials[row.date] = { start: row.start, end: row.end, notify: !!row.notify };
   }
 
-  const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at ASC').all().map((t) => ({
-    id: t.id,
-    title: t.title,
-    date: t.date,
-    endDate: t.end_date,
-    time: t.time,
-    priority: t.priority,
-    obs: t.obs,
-    done: !!t.done,
-    notify: !!t.notify,
-  }));
+  const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at ASC').all().map(serializeTask);
 
   const abonos = {};
   for (const row of db.prepare('SELECT * FROM abonos').all()) abonos[row.date] = true;
@@ -281,47 +287,90 @@ const validTime = (v) => (v && /^\d{2}:\d{2}$/.test(v) ? v : null);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const CLIENT_ID = /^[0-9a-f-]{16,64}$/i;
 
-const serializeTask = (t) => ({
-  id: t.id, title: t.title, date: t.date, endDate: t.end_date, time: t.time,
-  priority: t.priority, obs: t.obs, done: !!t.done, notify: !!t.notify,
-});
+// Fotos das tarefas ficam em arquivo (no mesmo volume do banco), não no SQLite
+const PHOTO_DIR = path.join(path.dirname(DB_PATH), 'photos');
+fs.mkdirSync(PHOTO_DIR, { recursive: true });
+const photoPath = (id) => path.join(PHOTO_DIR, `${String(id).replace(/[^0-9a-z-]/gi, '')}.jpg`);
+const removePhoto = (id) => { try { fs.unlinkSync(photoPath(id)); } catch (e) { /* sem foto */ } };
+
+const cleanAddress = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 300) : null);
+
+function serializeTask(t) {
+  return {
+    id: t.id, title: t.title, date: t.date, endDate: t.end_date, time: t.time,
+    priority: t.priority, obs: t.obs, address: t.address || null,
+    hasPhoto: !!t.has_photo, done: !!t.done, notify: !!t.notify,
+  };
+}
+
+const getTask = (id) => db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
 
 app.post('/api/tasks', (req, res) => {
-  const { id: clientId, title, date, endDate, time, priority, obs, notify } = req.body || {};
+  const { id: clientId, title, date, endDate, time, priority, obs, address, notify } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: 'title é obrigatório' });
   // Idempotente: reenvios do mesmo formulário (clique repetido / rede lenta) mandam o mesmo id
   const validClientId = clientId && CLIENT_ID.test(clientId) ? clientId : null;
   if (validClientId) {
-    const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(validClientId);
+    const existing = getTask(validClientId);
     if (existing) return res.status(200).json(serializeTask(existing));
   }
   const end = date && endDate && ISO_DATE.test(endDate) && endDate > date ? endDate : null;
   const id = validClientId || uuid();
   db.prepare(`
-    INSERT INTO tasks (id, title, date, end_date, time, priority, obs, done, created_at, notify)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-  `).run(id, title.trim(), date || null, end, validTime(time), priority ?? null, obs || null, now(), toBool(notify));
-  res.status(201).json({ id, title: title.trim(), date: date || null, endDate: end, time: validTime(time), priority: priority ?? null, obs: obs || null, done: false, notify: !!notify });
+    INSERT INTO tasks (id, title, date, end_date, time, priority, obs, address, done, created_at, notify)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+  `).run(id, title.trim(), date || null, end, validTime(time), priority ?? null, obs || null, cleanAddress(address), now(), toBool(notify));
+  res.status(201).json(serializeTask(getTask(id)));
 });
 
 app.put('/api/tasks/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  const existing = getTask(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not_found' });
   const body = req.body || {};
-  const title = Object.prototype.hasOwnProperty.call(body, 'title') ? body.title : existing.title;
-  const date = Object.prototype.hasOwnProperty.call(body, 'date') ? body.date : existing.date;
-  const rawEnd = Object.prototype.hasOwnProperty.call(body, 'endDate') ? body.endDate : existing.end_date;
-  const endDate = date && rawEnd && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) && rawEnd > date ? rawEnd : null;
-  const time = validTime(Object.prototype.hasOwnProperty.call(body, 'time') ? body.time : existing.time);
-  const priority = Object.prototype.hasOwnProperty.call(body, 'priority') ? body.priority : existing.priority;
-  const obs = Object.prototype.hasOwnProperty.call(body, 'obs') ? body.obs : existing.obs;
-  const done = Object.prototype.hasOwnProperty.call(body, 'done') ? toBool(body.done) : existing.done;
-  const notify = Object.prototype.hasOwnProperty.call(body, 'notify') ? toBool(body.notify) : existing.notify;
+  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+  const title = has('title') ? body.title : existing.title;
+  const date = has('date') ? body.date : existing.date;
+  const rawEnd = has('endDate') ? body.endDate : existing.end_date;
+  const endDate = date && rawEnd && ISO_DATE.test(rawEnd) && rawEnd > date ? rawEnd : null;
+  const time = validTime(has('time') ? body.time : existing.time);
+  const priority = has('priority') ? body.priority : existing.priority;
+  const obs = has('obs') ? body.obs : existing.obs;
+  const address = has('address') ? cleanAddress(body.address) : existing.address;
+  const done = has('done') ? toBool(body.done) : existing.done;
+  const notify = has('notify') ? toBool(body.notify) : existing.notify;
 
-  db.prepare('UPDATE tasks SET title = ?, date = ?, end_date = ?, time = ?, priority = ?, obs = ?, done = ?, notify = ? WHERE id = ?')
-    .run(title, date, endDate, time, priority, obs, done, notify, req.params.id);
+  db.prepare('UPDATE tasks SET title = ?, date = ?, end_date = ?, time = ?, priority = ?, obs = ?, address = ?, done = ?, notify = ? WHERE id = ?')
+    .run(title, date, endDate, time, priority, obs, address, done, notify, req.params.id);
 
-  res.json({ id: req.params.id, title, date, endDate, time, priority, obs, done: !!done, notify: !!notify });
+  res.json(serializeTask(getTask(req.params.id)));
+});
+
+// ---- Foto da tarefa (JPEG já reduzido no cliente, enviado como data URL) ----
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+app.put('/api/tasks/:id/photo', (req, res) => {
+  if (!getTask(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  const m = /^data:image\/(?:jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec((req.body || {}).dataUrl || '');
+  if (!m) return res.status(400).json({ error: 'imagem inválida' });
+  const buf = Buffer.from(m[1], 'base64');
+  if (!buf.length || buf.length > MAX_PHOTO_BYTES) return res.status(400).json({ error: 'imagem muito grande' });
+  fs.writeFileSync(photoPath(req.params.id), buf);
+  db.prepare('UPDATE tasks SET has_photo = 1 WHERE id = ?').run(req.params.id);
+  res.json(serializeTask(getTask(req.params.id)));
+});
+
+app.delete('/api/tasks/:id/photo', (req, res) => {
+  if (!getTask(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  removePhoto(req.params.id);
+  db.prepare('UPDATE tasks SET has_photo = 0 WHERE id = ?').run(req.params.id);
+  res.json(serializeTask(getTask(req.params.id)));
+});
+
+app.get('/api/tasks/:id/photo', (req, res) => {
+  const file = photoPath(req.params.id);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'not_found' });
+  res.set('Cache-Control', 'private, no-cache');
+  res.type('image/jpeg').sendFile(file);
 });
 
 // Exclusão definitiva em lote: 'backlog' (sem data, pendentes) ou 'done' (concluídas)
@@ -329,12 +378,14 @@ app.post('/api/tasks/bulk-delete', (req, res) => {
   const { scope } = req.body || {};
   const where = { backlog: 'date IS NULL AND done = 0', done: 'done = 1' }[scope];
   if (!where) return res.status(400).json({ error: 'scope inválido' });
+  for (const { id } of db.prepare(`SELECT id FROM tasks WHERE ${where} AND has_photo = 1`).all()) removePhoto(id);
   const info = db.prepare(`DELETE FROM tasks WHERE ${where}`).run();
   db.exec('VACUUM');
   res.json({ deleted: Number(info.changes) });
 });
 
 app.delete('/api/tasks/:id', (req, res) => {
+  removePhoto(req.params.id);
   db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
   res.status(204).end();
 });
