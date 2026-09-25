@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agenda-shell-v15';
+const CACHE_NAME = 'agenda-shell-v16';
 const SHELL_FILES = [
   '/',
   '/index.html',
@@ -25,7 +25,8 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// App shell: stale-while-revalidate. /api/*: sempre rede (dados ao vivo).
+// Rede primeiro (versão nova logo após o deploy, HTML/JS/CSS sempre da mesma
+// versão); cache só quando estiver sem internet. /api/*: sempre rede.
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -34,17 +35,14 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    })
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((cached) => cached || (request.mode === 'navigate' ? caches.match('/index.html') : undefined)))
   );
 });

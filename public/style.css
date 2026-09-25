@@ -387,7 +387,7 @@ button:disabled, .is-busy { opacity: 0.6; cursor: wait; pointer-events: none; }
 .clock-mode.active { background: color-mix(in srgb, var(--primary) 14%, white); border-color: var(--primary); color: var(--primary); }
 .clock-sep { font-size: 30px; font-weight: 800; color: var(--text-muted); }
 .clock-hint { text-align: center; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
-.clock-face { display: block; width: 100%; max-width: 280px; margin: 0 auto; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.clock-face { display: block; width: 100%; max-width: 280px; margin: 0 auto; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: pointer; }
 .clock-bg { fill: var(--card-bg); stroke: var(--border-color); stroke-width: 2; }
 .clock-hand { stroke: var(--primary); stroke-width: 3; stroke-linecap: round; }
 .clock-center { fill: var(--primary); }

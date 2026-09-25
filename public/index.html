@@ -25,6 +25,15 @@
     </form>
 </div>
 
+<!-- Carregando / sem conexão (quando já existe sessão salva) -->
+<div id="bootScreen" class="login-screen hidden">
+    <div class="login-card">
+        <h1>Agenda de Escala</h1>
+        <p id="bootMsg" class="login-subtitle">Carregando…</p>
+        <button id="bootRetry" class="btn-submit hidden" onclick="boot()">Tentar de novo</button>
+    </div>
+</div>
+
 <!-- ===================== APP ===================== -->
 <div id="app" class="hidden">
     <header>
@@ -164,7 +173,7 @@
 
         <div class="form-group">
             <label>Data</label>
-            <input type="text" id="inputDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
+            <input type="text" id="inputDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this); syncAbonoDeleteBtn()">
         </div>
 
         <p class="confirm-message">Abono transforma um dia de <strong>trabalho</strong> em folga. Todos os dias de folga em sequência (antes e depois) acendem em <strong style="color:#10b981">verde</strong> como folga prolongada.</p>

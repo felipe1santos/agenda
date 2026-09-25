@@ -5,7 +5,7 @@ const alertSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const PRIORITY_LABELS = { 1: 'Baixa', 2: 'Média', 3: 'Alta', 4: 'Urgente', 5: 'Crítica' };
 
 function prioClass(priority) {
-  return priority ? ' prio-fill prio-fill-' + priority : '';
+  return Number.isInteger(priority) && priority >= 1 && priority <= 5 ? ' prio-fill prio-fill-' + priority : '';
 }
 
 // Ícone de alerta só na prioridade máxima (vermelho piscando)
@@ -162,7 +162,12 @@ async function api(path, method = 'GET', body) {
   const token = getToken();
   if (token) opts.headers['Authorization'] = 'Bearer ' + token;
 
-  const res = await fetch(path, opts);
+  let res;
+  try {
+    res = await fetch(path, opts);
+  } catch {
+    throw new Error('sem conexão com o servidor');
+  }
   if (res.status === 401) {
     showLogin();
     throw new Error('unauthorized');
@@ -178,7 +183,13 @@ async function api(path, method = 'GET', body) {
 function showLogin() {
   clearToken();
   $('#app').classList.add('hidden');
+  $('#bootScreen').classList.add('hidden');
   $('#loginScreen').classList.remove('hidden');
+}
+
+function showLoginError(msg) {
+  $('#loginError').textContent = msg;
+  $('#loginError').classList.remove('hidden');
 }
 
 function logout() {
@@ -190,26 +201,37 @@ function logout() {
 $('#loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const password = $('#loginPassword').value;
+  let res;
   try {
-    const res = await fetch('/api/login', {
+    res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
     });
-    if (!res.ok) throw new Error();
-    const { token } = await res.json();
-    setToken(token);
-    $('#loginError').classList.add('hidden');
-    await boot();
   } catch {
-    $('#loginError').classList.remove('hidden');
+    return showLoginError('Sem conexão com o servidor. Tente de novo.');
   }
+  if (res.status === 401) return showLoginError('Senha incorreta.');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    return showLoginError(res.status === 429 ? 'Muitas tentativas. Aguarde alguns minutos.' : (err.error || 'Erro no servidor. Tente de novo.'));
+  }
+  const { token } = await res.json();
+  setToken(token);
+  $('#loginError').classList.add('hidden');
+  await boot();
 });
 
+// Com sessão salva o app vai direto para cá (sem tela de senha). Falha de rede
+// ou servidor reiniciando mostra "sem conexão" em vez de pedir a senha.
 async function boot() {
+  $('#loginScreen').classList.add('hidden');
+  $('#bootScreen').classList.remove('hidden');
+  $('#bootMsg').textContent = 'Carregando…';
+  $('#bootRetry').classList.add('hidden');
   try {
     state = await api('/api/state');
-    $('#loginScreen').classList.add('hidden');
+    $('#bootScreen').classList.add('hidden');
     $('#app').classList.remove('hidden');
     if (!state.vacations) state.vacations = [];
     applyViewMode();
@@ -218,7 +240,10 @@ async function boot() {
     if (!state.config.anchorDate) openConfigModal();
     checkDueNotifications();
   } catch (e) {
-    if (e.message !== 'unauthorized') console.error(e);
+    if (e.message === 'unauthorized') return; // api() já mostrou a tela de senha
+    console.error(e);
+    $('#bootMsg').textContent = 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
+    $('#bootRetry').classList.remove('hidden');
   }
 }
 
@@ -228,7 +253,7 @@ function getCycleIndex(dateString) {
   if (!cfg.anchorDate || !cfg.cycleLength) return -1;
   const anchor = new Date(cfg.anchorDate + 'T00:00:00');
   const target = new Date(dateString + 'T00:00:00');
-  const diffDays = Math.floor((target.getTime() - anchor.getTime()) / 86400000);
+  const diffDays = Math.round((target.getTime() - anchor.getTime()) / 86400000);
   return ((diffDays % cfg.cycleLength) + cfg.cycleLength) % cfg.cycleLength;
 }
 
@@ -345,6 +370,9 @@ function showConfirm(message, onConfirm) {
   $('#confirmMessage').textContent = message;
   const oldBtn = $('#confirmBtn');
   const newBtn = oldBtn.cloneNode(true);
+  newBtn.disabled = false;
+  newBtn.classList.remove('is-busy');
+  newBtn.textContent = 'Confirmar';
   oldBtn.parentNode.replaceChild(newBtn, oldBtn);
   newBtn.addEventListener('click', () => runOnce('confirm', newBtn, onConfirm));
   openModal('confirmModal');
@@ -352,7 +380,7 @@ function showConfirm(message, onConfirm) {
 
 // ===================== Calendário ===================== //
 function changeMonth(direction) {
-  currentDate.setMonth(currentDate.getMonth() + direction);
+  currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + direction, 1);
   renderCalendar();
 }
 
@@ -422,7 +450,7 @@ function getDayTags(dateStr, shift) {
 
   const mk = monthKeyOf(dateStr);
   recurringForDate(dateStr).forEach((r) => {
-    const pending = r.lastDoneMonth !== mk;
+    const pending = !isRecurringDone(r, mk);
     tags.push({ label: '🔁 ' + r.title, cls: pending ? 'day-tag-recurring-pending' : 'day-tag-recurring-done' });
   });
 
@@ -490,10 +518,16 @@ function createDayCard(year, month, day, isNextMonth) {
 
 function monthKeyOf(dateStr) { const [y, m] = dateStr.split('-'); return `${y}-${m}`; }
 
+function isRecurringDone(r, mk) {
+  return (r.doneMonths || []).includes(mk);
+}
+
+// Não aparece em meses anteriores ao cadastro do lembrete
 function recurringForDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
-  return state.recurring.filter((r) => Math.min(r.dayOfMonth, daysInMonth) === d);
+  const mk = monthKeyOf(dateStr);
+  return state.recurring.filter((r) => Math.min(r.dayOfMonth, daysInMonth) === d && (!r.createdMonth || mk >= r.createdMonth));
 }
 
 function renderDayBody(dateStr, shift) {
@@ -507,12 +541,12 @@ function renderDayBody(dateStr, shift) {
   const sp = state.specials[dateStr];
   if (sp) {
     const isEmendando = shift.cycleIndex === 0;
-    html += `<div class="special-alert" onclick="event.stopPropagation(); openSpecialsListModal()">ESPECIAL: ${sp.start} às ${sp.end}${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>`;
+    html += `<div class="special-alert" onclick="event.stopPropagation(); openSpecialsListModal()">ESPECIAL: ${escapeHtml(sp.start)} às ${escapeHtml(sp.end)}${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>`;
   }
 
   const mk = monthKeyOf(dateStr);
   recurringForDate(dateStr).forEach((r) => {
-    const pending = r.lastDoneMonth !== mk;
+    const pending = !isRecurringDone(r, mk);
     html += `<div class="recurring-alert ${pending ? 'pending' : 'done'}" onclick="event.stopPropagation(); toggleRecurringMonth('${r.id}','${mk}')">🔁 ${escapeHtml(r.title)} ${pending ? '<span class="recurring-hint">toque p/ confirmar</span>' : '✓ feito'}</div>`;
   });
 
@@ -583,7 +617,7 @@ function openAbonoForDate(dateStr) {
 // ===================== Modal: Abono ===================== //
 function openAbonoModal(dateStr) {
   $('#inputDate').value = isoToBR(dateStr);
-  $('#btnDeleteAbono').classList.toggle('hidden', !state.abonos[dateStr]);
+  syncAbonoDeleteBtn();
   openModal('abonoModal');
 }
 
@@ -594,6 +628,11 @@ function nextWorkDay(fromDate) {
     d = addDays(d, 1);
   }
   return fromDate;
+}
+
+function syncAbonoDeleteBtn() {
+  const dateStr = brToISO($('#inputDate').value);
+  $('#btnDeleteAbono').classList.toggle('hidden', !(dateStr && state.abonos[dateStr]));
 }
 
 function saveAbono(btn) {
@@ -667,6 +706,7 @@ function saveVacation(btn) {
     $('#vacationEnd').value = '';
     renderVacationList();
     renderAll();
+    refreshDaySheet();
   });
 }
 
@@ -679,6 +719,7 @@ function confirmDeleteVacation(id) {
     closeModal('confirmModal');
     renderVacationList();
     renderAll();
+    refreshDaySheet();
   });
 }
 
@@ -702,7 +743,7 @@ function renderSpecialsList() {
       <div class="list-item">
         <div class="item-content">
           <div class="item-title">${formatDateBRFull(dateStr)} - ${dayNames[dateObj.getDay()]}</div>
-          <div class="item-meta"><span>${sp.start} às ${sp.end}</span>${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>
+          <div class="item-meta"><span>${escapeHtml(sp.start)} às ${escapeHtml(sp.end)}</span>${isEmendando ? '<span class="emendando-tag">EMENDANDO</span>' : ''}</div>
         </div>
         <div class="item-actions">
           <button class="icon-btn" title="Excluir" onclick="confirmDeleteSpecial('${dateStr}')">🗑</button>
@@ -821,24 +862,36 @@ function setMeridiem(m) {
     renderClock();
   }
 }
-let clockDragging = false;
+// Toque simples marca o número; arrastar só a partir da bolinha do ponteiro.
+// Assim rolar o formulário passando o dedo pelo relógio não muda o horário.
+let clockPress = null;
 
 function buildTaskPickers() {
   const face = $('#clockFace');
+  // Começou na bolinha: bloqueia a rolagem para permitir arrastar o ponteiro
+  face.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    if (t && isOnClockKnob(t.clientX, t.clientY)) e.preventDefault();
+  }, { passive: false });
   face.addEventListener('pointerdown', (e) => {
-    clockDragging = true;
-    face.setPointerCapture(e.pointerId);
-    applyClockPointer(e);
+    const drag = e.pointerType === 'mouse' || isOnClockKnob(e.clientX, e.clientY);
+    clockPress = { x: e.clientX, y: e.clientY, drag };
+    if (drag) {
+      face.setPointerCapture(e.pointerId);
+      applyClockPointer(e);
+    }
   });
-  face.addEventListener('pointermove', (e) => { if (clockDragging) applyClockPointer(e); });
-  const end = (e) => {
-    if (!clockDragging) return;
-    clockDragging = false;
+  face.addEventListener('pointermove', (e) => { if (clockPress && clockPress.drag) applyClockPointer(e); });
+  face.addEventListener('pointerup', (e) => {
+    if (!clockPress) return;
+    const moved = Math.hypot(e.clientX - clockPress.x, e.clientY - clockPress.y) > 10;
+    const wasDrag = clockPress.drag;
+    clockPress = null;
+    if (!wasDrag && moved) return; // foi rolagem, não toque
     applyClockPointer(e);
     if (clockMode === 'hour') setTimeout(() => setClockMode('minute'), 220);
-  };
-  face.addEventListener('pointerup', end);
-  face.addEventListener('pointercancel', () => { clockDragging = false; });
+  });
+  face.addEventListener('pointercancel', () => { clockPress = null; });
 
   $('#prioRow').innerHTML = `
     <button type="button" class="prio-btn prio-btn-0" data-prio="" onclick="pickPriority('')">Nenhuma</button>
@@ -896,6 +949,23 @@ function renderClock() {
   $('#clockModeMinute').classList.toggle('active', clockMode === 'minute');
   $('#clockModeHour').textContent = h != null ? h : '--';
   $('#clockModeMinute').textContent = min != null ? min : '--';
+}
+
+// Posição da bolinha do ponteiro atual (coordenadas do SVG), ou null
+function clockKnobPoint() {
+  const { h, min } = currentTimeParts();
+  if (clockMode === 'hour') return h != null ? clockPoint(+h % 12, CLOCK.rOuter) : null;
+  return min != null ? clockPoint(+min / 5, CLOCK.rOuter) : null;
+}
+
+function isOnClockKnob(clientX, clientY) {
+  const knob = clockKnobPoint();
+  if (!knob) return false;
+  const rect = $('#clockFace').getBoundingClientRect();
+  const scale = CLOCK.size / rect.width;
+  const x = (clientX - rect.left) * scale;
+  const y = (clientY - rect.top) * scale;
+  return Math.hypot(x - knob[0], y - knob[1]) <= CLOCK.knob + 16;
 }
 
 function applyClockPointer(e) {
@@ -1095,8 +1165,14 @@ function saveTaskModal(btn) {
   return runOnce('task-save', btn, doSaveTaskModal);
 }
 
+// Identifica qual formulário está aberto (edição: id da tarefa; nova: id do rascunho)
+function taskFormKey() { return $('#taskModalId').value || taskDraftId; }
+
 async function doSaveTaskModal() {
   const id = $('#taskModalId').value;
+  const formKey = taskFormKey();
+  const draftId = taskDraftId;
+  const photo = { ...taskPhotoDraft };
   const title = $('#taskModalTitleInput').value.trim();
   if (!title) return alert('Dê um título à tarefa.');
   const dateBR = $('#taskModalDate').value.trim();
@@ -1123,23 +1199,25 @@ async function doSaveTaskModal() {
   if (id) {
     saved = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, time, priority, obs, address, notify });
   } else {
-    saved = await api('/api/tasks', 'POST', { id: taskDraftId, title, date, endDate, time, priority, obs, address, notify });
+    saved = await api('/api/tasks', 'POST', { id: draftId, title, date, endDate, time, priority, obs, address, notify });
   }
 
-  if (taskPhotoDraft.dataUrl) {
-    saved = await api(`/api/tasks/${saved.id}/photo`, 'PUT', { dataUrl: taskPhotoDraft.dataUrl });
+  if (photo.dataUrl) {
+    saved = await api(`/api/tasks/${saved.id}/photo`, 'PUT', { dataUrl: photo.dataUrl });
     forgetTaskPhoto(saved.id);
-    taskPhotoDraft.dataUrl = null;
-  } else if (taskPhotoDraft.remove) {
+  } else if (photo.remove) {
     saved = await api(`/api/tasks/${saved.id}/photo`, 'DELETE');
     forgetTaskPhoto(saved.id);
-    taskPhotoDraft.remove = false;
   }
 
   const idx = state.tasks.findIndex((t) => t.id === saved.id);
   if (idx >= 0) state.tasks[idx] = saved; else state.tasks.push(saved);
 
-  closeModal('taskModal');
+  // Se o usuário já abriu outro formulário enquanto salvava, não mexe nele
+  if (taskFormKey() === formKey) {
+    taskPhotoDraft = { dataUrl: null, remove: false, existing: saved.hasPhoto };
+    closeModal('taskModal');
+  }
   renderAll();
   refreshDaySheet();
 }
@@ -1200,6 +1278,7 @@ function confirmDeleteTask(id) {
   const task = state.tasks.find((t) => t.id === id);
   showConfirm(`Excluir a tarefa "${task.title}"?`, async () => {
     await api(`/api/tasks/${id}`, 'DELETE');
+    forgetTaskPhoto(id);
     state.tasks = state.tasks.filter((t) => t.id !== id);
     closeModal('confirmModal');
     renderAll();
@@ -1214,6 +1293,7 @@ function confirmBulkDeleteTasks(scope) {
   const what = scope === 'backlog' ? 'sem data' : 'concluídas';
   showConfirm(`Apagar definitivamente ${count} tarefa(s) ${what}? Isso não pode ser desfeito.`, async () => {
     await api('/api/tasks/bulk-delete', 'POST', { scope });
+    state.tasks.filter(match).forEach((t) => forgetTaskPhoto(t.id));
     state.tasks = state.tasks.filter((t) => !match(t));
     closeModal('confirmModal');
     renderAll();
@@ -1411,10 +1491,14 @@ function renderShoppingCategory(el, catId) {
     <button class="link-btn" style="margin:4px 0 8px" onclick="clearShoppingDone('${catId}')">Limpar concluídos</button>
     <div class="item-list">${itemsHtml}</div>
   `;
-  $('#shoppingItemInput').focus();
 }
 
-function openShoppingCat(id) { currentShoppingCat = id; renderShopping(); }
+function openShoppingCat(id) {
+  currentShoppingCat = id;
+  renderShopping();
+  const input = $('#shoppingItemInput');
+  if (input) input.focus();
+}
 function backToFolders() { currentShoppingCat = null; renderShopping(); }
 
 function addShoppingCategory() {
@@ -1465,6 +1549,7 @@ async function doAddShoppingItem(category) {
   state.shopping[category].push(created);
   input.value = '';
   renderShopping();
+  $('#shoppingItemInput').focus();
 }
 
 function toggleShoppingItem(id, done) {
@@ -1493,8 +1578,11 @@ function clearShoppingDone(category) {
   const doneItems = (state.shopping[category] || []).filter((i) => i.done);
   if (!doneItems.length) return;
   showConfirm(`Remover ${doneItems.length} item(ns) concluído(s)?`, async () => {
-    for (const it of doneItems) await api(`/api/shopping/${it.id}`, 'DELETE');
-    state.shopping[category] = state.shopping[category].filter((i) => !i.done);
+    // remove do estado local item a item, para não dessincronizar se um falhar
+    for (const it of doneItems) {
+      await api(`/api/shopping/${it.id}`, 'DELETE');
+      state.shopping[category] = state.shopping[category].filter((i) => i.id !== it.id);
+    }
     closeModals();
     renderShopping();
   });
@@ -1508,7 +1596,7 @@ function renderRecurring() {
   if (!state.recurring.length) { el.innerHTML = '<div class="empty-state">Nenhum lembrete mensal. Toque em + para criar.</div>'; return; }
   const mk = currentMonthKey();
   el.innerHTML = state.recurring.map((r) => {
-    const pending = r.lastDoneMonth !== mk;
+    const pending = !isRecurringDone(r, mk);
     return `
       <div class="list-item ${pending ? '' : 'done'}">
         <button class="check-circle" onclick="toggleRecurringMonth('${r.id}','${mk}')">${pending ? '' : '✓'}</button>
@@ -1531,8 +1619,7 @@ function toggleRecurringMonth(id, mk) {
 async function doToggleRecurringMonth(id, mk) {
   const r = state.recurring.find((x) => x.id === id);
   if (!r) return;
-  const newVal = r.lastDoneMonth === mk ? null : mk;
-  const updated = await api(`/api/recurring/${id}`, 'PUT', { lastDoneMonth: newVal });
+  const updated = await api(`/api/recurring/${id}`, 'PUT', { month: mk, done: !isRecurringDone(r, mk) });
   Object.assign(r, updated);
   renderAll();
   refreshDaySheet();
@@ -1626,13 +1713,12 @@ function saveNotifiedToday(ids) {
   localStorage.setItem(NOTIFIED_KEY, JSON.stringify({ date: todayISO(), ids }));
 }
 
-async function showAppNotification(title, body) {
-  if ('serviceWorker' in navigator) {
-    const reg = await navigator.serviceWorker.ready;
-    reg.showNotification(title, { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png' });
-  } else {
-    new Notification(title, { body });
-  }
+async function showAppNotification(title, body, tag) {
+  // getRegistration (e não .ready) para não travar se o service worker não registrou
+  const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+  const opts = { body, tag, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png' };
+  if (reg) return reg.showNotification(title, opts);
+  new Notification(title, opts);
 }
 
 async function checkDueNotifications() {
@@ -1643,21 +1729,21 @@ async function checkDueNotifications() {
 
   for (const t of state.tasks) {
     if (taskOccursOn(t, today) && !t.done && t.notify && !notified.includes('task:' + t.id)) {
-      await showAppNotification('Tarefa de hoje', t.title);
+      await showAppNotification('Tarefa de hoje', t.title, 'task:' + t.id);
       newlyNotified.push('task:' + t.id);
     }
   }
 
   const sp = state.specials[today];
   if (sp && sp.notify && !notified.includes('special:' + today)) {
-    await showAppNotification('Especial hoje', `${sp.start} às ${sp.end}`);
+    await showAppNotification('Especial hoje', `${sp.start} às ${sp.end}`, 'special:' + today);
     newlyNotified.push('special:' + today);
   }
 
   const mk = monthKeyOf(today);
   for (const r of recurringForDate(today)) {
-    if (r.notify && r.lastDoneMonth !== mk && !notified.includes('recurring:' + r.id)) {
-      await showAppNotification('Lembrete mensal', r.title);
+    if (r.notify && !isRecurringDone(r, mk) && !notified.includes('recurring:' + r.id)) {
+      await showAppNotification('Lembrete mensal', r.title, 'recurring:' + r.id);
       newlyNotified.push('recurring:' + r.id);
     }
   }
@@ -1674,6 +1760,7 @@ let backGuardArmed = false;
 
 function armBackGuard() {
   if (backGuardArmed || !getToken() || $('#app').classList.contains('hidden')) return;
+  if (history.state && history.state.agendaGuard) { backGuardArmed = true; return; }
   history.pushState({ agendaGuard: true }, '');
   backGuardArmed = true;
 }
