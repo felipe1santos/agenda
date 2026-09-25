@@ -201,7 +201,11 @@
                 <button type="button" class="clock-mode" id="clockModeMinute" onclick="setClockMode('minute')">--</button>
             </div>
             <p class="clock-hint">Toque ou arraste: primeiro a hora, depois o minuto</p>
-            <svg id="clockFace" class="clock-face" viewBox="0 0 280 280" role="img" aria-label="Relógio para escolher o horário"></svg>
+            <div class="clock-wrap">
+                <button type="button" class="clock-ampm clock-am" id="clockAM" onclick="setMeridiem('AM')">AM</button>
+                <button type="button" class="clock-ampm clock-pm" id="clockPM" onclick="setMeridiem('PM')">PM</button>
+                <svg id="clockFace" class="clock-face" viewBox="0 0 280 280" role="img" aria-label="Relógio para escolher o horário"></svg>
+            </div>
         </div>
 
         <div class="field-card">

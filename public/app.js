@@ -790,10 +790,37 @@ function taskListItemHtml(t, context) {
 }
 
 // ---- Relógio analógico para o horário ---- //
-// Modo "hora": anel de fora 1–12, anel de dentro 13–23 e 00. Ao soltar o dedo
-// passa sozinho para o modo "minuto" (de 5 em 5). Tocar ou arrastar funciona.
-const CLOCK = { size: 280, c: 140, rOuter: 110, rInner: 72, knob: 20 };
+// Modo "hora": mostrador 1–12 + botões AM/PM (os números pequenos por dentro
+// mostram o equivalente 24h). Ao soltar o dedo passa sozinho para o modo
+// "minuto" (de 5 em 5). Tocar ou arrastar funciona.
+const CLOCK = { size: 280, c: 140, rOuter: 110, rInner: 74, knob: 20 };
 let clockMode = 'hour';
+let clockMeridiem = 'AM';
+
+// 1–12 + AM/PM -> 0–23
+function to24h(h12, meridiem) {
+  if (meridiem === 'AM') return h12 === 12 ? 0 : h12;
+  return h12 === 12 ? 12 : h12 + 12;
+}
+
+// Sem horário definido, AM/PM segue a hora atual
+function resetClock() {
+  clockMode = 'hour';
+  const { h } = currentTimeParts();
+  clockMeridiem = (h != null ? +h : new Date().getHours()) >= 12 ? 'PM' : 'AM';
+  renderClock();
+}
+
+function setMeridiem(m) {
+  clockMeridiem = m;
+  const { h } = currentTimeParts();
+  if (h != null) {
+    const h12 = +h % 12 || 12;
+    pickHour(pad(to24h(h12, m)));
+  } else {
+    renderClock();
+  }
+}
 let clockDragging = false;
 
 function buildTaskPickers() {
@@ -833,15 +860,18 @@ function renderClock() {
   let hand = null;
   let selected = null;
 
+  if (h != null) clockMeridiem = +h >= 12 ? 'PM' : 'AM';
+
   if (clockMode === 'hour') {
     for (let i = 0; i < 12; i++) {
-      labels.push({ text: String(i === 0 ? 12 : i), value: i === 0 ? 12 : i, pos: clockPoint(i, CLOCK.rOuter), inner: false });
-      labels.push({ text: pad(i === 0 ? 0 : i + 12), value: i === 0 ? 0 : i + 12, pos: clockPoint(i, CLOCK.rInner), inner: true });
+      const h12 = i === 0 ? 12 : i;
+      labels.push({ text: String(h12), value: h12, pos: clockPoint(i, CLOCK.rOuter), inner: false });
+      // referência 24h (não clicável à parte): 3 PM -> 15
+      labels.push({ text: pad(to24h(h12, clockMeridiem)), value: null, pos: clockPoint(i, CLOCK.rInner), inner: true });
     }
     if (h != null) {
-      selected = +h;
-      const inner = selected === 0 || selected > 12;
-      hand = clockPoint(selected % 12, inner ? CLOCK.rInner : CLOCK.rOuter);
+      selected = +h % 12 || 12;
+      hand = clockPoint(selected % 12, CLOCK.rOuter);
     }
   } else {
     for (let i = 0; i < 12; i++) labels.push({ text: pad(i * 5), value: i * 5, pos: clockPoint(i, CLOCK.rOuter), inner: false });
@@ -857,9 +887,11 @@ function renderClock() {
     ${hand ? `<line x1="${c}" y1="${c}" x2="${hand[0]}" y2="${hand[1]}" class="clock-hand"></line>
       <circle cx="${c}" cy="${c}" r="4" class="clock-center"></circle>
       <circle cx="${hand[0]}" cy="${hand[1]}" r="${knob}" class="clock-knob"></circle>` : ''}
-    ${labels.map((l) => `<text x="${l.pos[0]}" y="${l.pos[1]}" class="clock-num${l.inner ? ' inner' : ''}${l.value === selected ? ' active' : ''}">${l.text}</text>`).join('')}
+    ${labels.map((l) => `<text x="${l.pos[0]}" y="${l.pos[1]}" class="clock-num${l.inner ? ' inner' : ''}${selected != null && l.value === selected ? ' active' : ''}">${l.text}</text>`).join('')}
   `;
 
+  $('#clockAM').classList.toggle('active', clockMeridiem === 'AM');
+  $('#clockPM').classList.toggle('active', clockMeridiem === 'PM');
   $('#clockModeHour').classList.toggle('active', clockMode === 'hour');
   $('#clockModeMinute').classList.toggle('active', clockMode === 'minute');
   $('#clockModeHour').textContent = h != null ? h : '--';
@@ -876,9 +908,7 @@ function applyClockPointer(e) {
   const step = Math.round((angle / (2 * Math.PI)) * 12) % 12;
 
   if (clockMode === 'hour') {
-    const inner = Math.hypot(x, y) < (CLOCK.rOuter + CLOCK.rInner) / 2;
-    const hour = inner ? (step === 0 ? 0 : step + 12) : (step === 0 ? 12 : step);
-    pickHour(pad(hour));
+    pickHour(pad(to24h(step === 0 ? 12 : step, clockMeridiem)));
   } else {
     pickMinute(pad(step * 5));
   }
@@ -911,8 +941,7 @@ function pickMinute(min) {
 
 function clearTaskTime() {
   $('#taskModalTime').value = '';
-  clockMode = 'hour';
-  renderClock();
+  resetClock();
 }
 
 // Chamado ao digitar o horário no campo
@@ -1053,8 +1082,7 @@ function openTaskModal(id, defaultDate) {
     }).catch(() => {});
   }
 
-  clockMode = 'hour';
-  renderClock();
+  resetClock();
   syncPriorityPicker();
   // Abre as opções extras só quando a tarefa já usa alguma delas
   toggleTaskAdvanced(!!(task && (task.endDate || task.obs || task.address || task.hasPhoto)));

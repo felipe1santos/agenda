@@ -396,3 +396,10 @@ button:disabled, .is-busy { opacity: 0.6; cursor: wait; pointer-events: none; }
 .clock-num.inner { font-size: 13px; font-weight: 600; fill: var(--text-muted); }
 .clock-num.active { fill: #fff; }
 .task-extras { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+
+/* AM/PM nos cantos superiores do relógio */
+.clock-wrap { position: relative; max-width: 300px; margin: 0 auto; }
+.clock-ampm { position: absolute; top: 0; z-index: 1; min-width: 52px; padding: 8px 10px; border: 1px solid var(--border-color); background: var(--card-bg); border-radius: 10px; font-size: 15px; font-weight: 800; color: var(--text-muted); cursor: pointer; }
+.clock-am { left: 0; }
+.clock-pm { right: 0; }
+.clock-ampm.active { background: var(--primary); border-color: var(--primary); color: #fff; }
