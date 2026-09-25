@@ -82,6 +82,13 @@ db.exec(`
     date TEXT PRIMARY KEY,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS vacations (
+    id TEXT PRIMARY KEY,
+    start TEXT NOT NULL,
+    end TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
 `);
 
 // Remove CHECK fixo de shopping_items.category (permite categorias custom)
@@ -232,7 +239,10 @@ app.get('/api/state', (req, res) => {
     notify: !!r.notify,
   }));
 
-  res.json({ config, specials, tasks, projects, shopping, shoppingCategories, recurring, abonos });
+  const vacations = db.prepare('SELECT * FROM vacations ORDER BY start ASC').all()
+    .map((v) => ({ id: v.id, start: v.start, end: v.end }));
+
+  res.json({ config, specials, tasks, projects, shopping, shoppingCategories, recurring, abonos, vacations });
 });
 
 // ---------- Config ----------
@@ -268,12 +278,25 @@ app.delete('/api/specials/:date', (req, res) => {
 
 // ---------- Tasks ----------
 const validTime = (v) => (v && /^\d{2}:\d{2}$/.test(v) ? v : null);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const CLIENT_ID = /^[0-9a-f-]{16,64}$/i;
+
+const serializeTask = (t) => ({
+  id: t.id, title: t.title, date: t.date, endDate: t.end_date, time: t.time,
+  priority: t.priority, obs: t.obs, done: !!t.done, notify: !!t.notify,
+});
 
 app.post('/api/tasks', (req, res) => {
-  const { title, date, endDate, time, priority, obs, notify } = req.body || {};
+  const { id: clientId, title, date, endDate, time, priority, obs, notify } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: 'title é obrigatório' });
-  const end = date && endDate && /^\d{4}-\d{2}-\d{2}$/.test(endDate) && endDate > date ? endDate : null;
-  const id = uuid();
+  // Idempotente: reenvios do mesmo formulário (clique repetido / rede lenta) mandam o mesmo id
+  const validClientId = clientId && CLIENT_ID.test(clientId) ? clientId : null;
+  if (validClientId) {
+    const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(validClientId);
+    if (existing) return res.status(200).json(serializeTask(existing));
+  }
+  const end = date && endDate && ISO_DATE.test(endDate) && endDate > date ? endDate : null;
+  const id = validClientId || uuid();
   db.prepare(`
     INSERT INTO tasks (id, title, date, end_date, time, priority, obs, done, created_at, notify)
     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
@@ -299,6 +322,16 @@ app.put('/api/tasks/:id', (req, res) => {
     .run(title, date, endDate, time, priority, obs, done, notify, req.params.id);
 
   res.json({ id: req.params.id, title, date, endDate, time, priority, obs, done: !!done, notify: !!notify });
+});
+
+// Exclusão definitiva em lote: 'backlog' (sem data, pendentes) ou 'done' (concluídas)
+app.post('/api/tasks/bulk-delete', (req, res) => {
+  const { scope } = req.body || {};
+  const where = { backlog: 'date IS NULL AND done = 0', done: 'done = 1' }[scope];
+  if (!where) return res.status(400).json({ error: 'scope inválido' });
+  const info = db.prepare(`DELETE FROM tasks WHERE ${where}`).run();
+  db.exec('VACUUM');
+  res.json({ deleted: Number(info.changes) });
 });
 
 app.delete('/api/tasks/:id', (req, res) => {
@@ -428,6 +461,24 @@ app.put('/api/abonos/:date', (req, res) => {
 
 app.delete('/api/abonos/:date', (req, res) => {
   db.prepare('DELETE FROM abonos WHERE date = ?').run(req.params.date);
+  res.status(204).end();
+});
+
+// ---------- Férias ----------
+app.post('/api/vacations', (req, res) => {
+  const { start, end } = req.body || {};
+  if (!ISO_DATE.test(start || '') || !ISO_DATE.test(end || '') || end < start) {
+    return res.status(400).json({ error: 'período inválido' });
+  }
+  const dup = db.prepare('SELECT * FROM vacations WHERE start = ? AND end = ?').get(start, end);
+  if (dup) return res.status(200).json({ id: dup.id, start: dup.start, end: dup.end });
+  const id = uuid();
+  db.prepare('INSERT INTO vacations (id, start, end, created_at) VALUES (?, ?, ?, ?)').run(id, start, end, now());
+  res.status(201).json({ id, start, end });
+});
+
+app.delete('/api/vacations/:id', (req, res) => {
+  db.prepare('DELETE FROM vacations WHERE id = ?').run(req.params.id);
   res.status(204).end();
 });
 

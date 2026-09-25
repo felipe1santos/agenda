@@ -36,16 +36,13 @@
             <h2 class="tab-title hidden" id="tabTitle">Tarefas</h2>
         </div>
         <div class="header-actions">
-            <button class="btn-icon" id="btnSpecialsList" onclick="openSpecialsListModal()" title="Dias Especiais">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="3"></circle></svg>
-            </button>
             <button class="btn-icon" id="btnViewToggle" onclick="toggleViewMode()" title="Mudar Visualização">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
             </button>
             <button class="btn-icon hidden" id="btnInstall" onclick="onInstallClick()" title="Instalar aplicativo">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </button>
-            <button class="btn-icon" onclick="openConfigModal()" title="Configurações">
+            <button class="btn-icon" onclick="openSettingsMenu()" title="Ajustes">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             </button>
         </div>
@@ -67,12 +64,18 @@
                 <h3 class="section-title">Próximas</h3>
                 <div id="tasksUpcoming" class="item-list"></div>
             </div>
-            <div class="list-section">
-                <h3 class="section-title">Lista de Afazeres</h3>
+            <div class="list-section hidden" id="backlogSection">
+                <div class="section-head">
+                    <h3 class="section-title">Sem data</h3>
+                    <button class="btn-danger-soft" onclick="confirmBulkDeleteTasks('backlog')">🗑 Apagar todas</button>
+                </div>
                 <div id="tasksBacklog" class="item-list"></div>
             </div>
             <div class="list-section">
-                <h3 class="section-title collapsible" onclick="toggleCollapse('tasksDoneWrap')">Concluídas <span class="chevron" id="tasksDoneWrap-chevron">▾</span></h3>
+                <div class="section-head">
+                    <h3 class="section-title collapsible" onclick="toggleCollapse('tasksDoneWrap')">Concluídas <span class="chevron" id="tasksDoneWrap-chevron">▾</span></h3>
+                    <button class="btn-danger-soft hidden" id="btnClearDone" onclick="confirmBulkDeleteTasks('done')">🗑 Limpar</button>
+                </div>
                 <div id="tasksDoneWrap" class="item-list collapsed"></div>
             </div>
         </section>
@@ -135,7 +138,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Configurar Escala</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
         <p class="confirm-message">Informe a data de um dia de trabalho conhecido. A partir daí o app monta a escala dia após dia, para sempre, até você alterar esta configuração.</p>
         <div class="form-group">
@@ -147,7 +150,7 @@
             <input type="number" id="folgaDays" class="form-control" min="1" step="1" value="2">
             <small class="hint">Escala 1x2: 1 dia de trabalho seguido de 2 dias de folga. Depois da última folga recomeça o trabalho — e o ciclo se repete para sempre.</small>
         </div>
-        <button class="btn-submit" onclick="saveConfig()">Salvar Escala</button>
+        <button class="btn-submit" onclick="saveConfig(this)">Salvar Escala</button>
         <button class="btn-secondary" onclick="logout()">Sair</button>
     </div>
 </div>
@@ -157,7 +160,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Marcar Abono</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
 
         <div class="form-group">
@@ -166,9 +169,9 @@
         </div>
 
         <p class="confirm-message">Abono transforma um dia de <strong>trabalho</strong> em folga. Todos os dias de folga em sequência (antes e depois) acendem em <strong style="color:#10b981">verde</strong> como folga prolongada.</p>
-        <button class="btn-secondary" id="btnDeleteAbono" onclick="deleteAbonoFromModal()">Remover Abono deste dia</button>
+        <button class="btn-secondary" id="btnDeleteAbono" onclick="deleteAbonoFromModal(this)">Remover Abono deste dia</button>
 
-        <button class="btn-submit" onclick="saveAbono()">Salvar</button>
+        <button class="btn-submit" onclick="saveAbono(this)">Salvar</button>
     </div>
 </div>
 
@@ -177,7 +180,7 @@
     <div class="modal-content modal-task">
         <div class="modal-header">
             <h3 id="taskModalTitle">Nova Tarefa</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
         <input type="hidden" id="taskModalId">
         <input type="hidden" id="taskModalPriority">
@@ -229,7 +232,7 @@
             <label class="checkbox-row"><input type="checkbox" id="taskModalNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
         </div>
 
-        <button class="btn-submit btn-hero" onclick="saveTaskModal()">Salvar</button>
+        <button class="btn-submit btn-hero" onclick="saveTaskModal(this)">Salvar</button>
     </div>
 </div>
 
@@ -238,7 +241,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="recurringModalTitle">Novo Recorrente</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
         <p class="confirm-message">Lembrete que se repete todo mês. Fica piscando vermelho no calendário no dia escolhido até você confirmar; no mês seguinte volta sozinho.</p>
         <input type="hidden" id="recurringModalId">
@@ -252,7 +255,7 @@
             <small class="hint">Em meses curtos (ex: dia 31 em fevereiro) cai no último dia do mês.</small>
         </div>
         <label class="checkbox-row"><input type="checkbox" id="recurringNotify" onchange="ensureNotificationPermission()"> 🔔 Notificar no dia</label>
-        <button class="btn-submit" onclick="saveRecurringModal()">Salvar</button>
+        <button class="btn-submit" onclick="saveRecurringModal(this)">Salvar</button>
     </div>
 </div>
 
@@ -261,13 +264,13 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Novo Projeto</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
         <div class="form-group">
             <label>Título do Projeto</label>
             <input type="text" id="projectTitle" class="form-control" placeholder="Ex: Reformar quarto">
         </div>
-        <button class="btn-submit" onclick="saveProject()">Criar</button>
+        <button class="btn-submit" onclick="saveProject(this)">Criar</button>
     </div>
 </div>
 
@@ -276,12 +279,11 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="daySheetTitle">Dia</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
         <div id="daySheetBody"></div>
         <div class="day-sheet-actions">
             <button class="btn-secondary" onclick="openAddRecordForDay('task')">+ Nova Tarefa</button>
-            <button class="btn-secondary" onclick="openAddRecordForDay('abono')">Marcar Abono</button>
         </div>
     </div>
 </div>
@@ -291,7 +293,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Dias Especiais</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
         <div id="specialsListBody" class="item-list"></div>
     </div>
@@ -302,12 +304,94 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Confirmar</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
         <p id="confirmMessage" class="confirm-message">Tem certeza?</p>
         <div class="form-row">
-            <button class="btn-secondary" style="flex:1;" onclick="closeModals()">Cancelar</button>
+            <button class="btn-secondary" style="flex:1;" onclick="closeTopModal()">Cancelar</button>
             <button class="btn-submit btn-danger" style="flex:1;" id="confirmBtn">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: AJUSTES (engrenagem) ===================== -->
+<div class="modal-overlay" id="settingsModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Ajustes</h3>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="menu-list">
+            <button class="menu-item" onclick="openFromMenu('abono')"><span class="menu-icon">🌴</span><span class="menu-text"><strong>Marcar Abono</strong><small>Transforma um dia de trabalho em folga</small></span></button>
+            <button class="menu-item" onclick="openFromMenu('vacation')"><span class="menu-icon">✈️</span><span class="menu-text"><strong>Férias</strong><small>Período inteiro de folga</small></span></button>
+            <button class="menu-item" onclick="openFromMenu('specials')"><span class="menu-icon">⭐</span><span class="menu-text"><strong>Dias Especiais</strong><small>Ver e excluir especiais</small></span></button>
+            <button class="menu-item" onclick="openFromMenu('config')"><span class="menu-icon">📅</span><span class="menu-text"><strong>Configurar Escala</strong><small>Dia de trabalho e dias de folga</small></span></button>
+            <button class="menu-item" onclick="logout()"><span class="menu-icon">🚪</span><span class="menu-text"><strong>Sair da conta</strong></span></button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: FÉRIAS ===================== -->
+<div class="modal-overlay" id="vacationModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Férias</h3>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="confirm-message">Todos os dias do período viram folga e acendem em <strong style="color:#10b981">verde</strong> no calendário.</p>
+        <div class="form-row">
+            <div class="form-group" style="flex:1">
+                <label>Início</label>
+                <input type="text" id="vacationStart" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
+            </div>
+            <div class="form-group" style="flex:1">
+                <label>Fim</label>
+                <input type="text" id="vacationEnd" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
+            </div>
+        </div>
+        <button class="btn-submit" onclick="saveVacation(this)">Salvar Férias</button>
+        <h4 class="section-title" style="margin-top:20px">Períodos cadastrados</h4>
+        <div id="vacationList" class="item-list"></div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: REAGENDAR TAREFA ===================== -->
+<div class="modal-overlay" id="rescheduleModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Nova data</h3>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <input type="hidden" id="rescheduleId">
+        <p class="confirm-message" id="rescheduleTaskTitle"></p>
+        <div class="field-card">
+            <div class="field-head">
+                <label class="field-label">Data</label>
+                <input type="text" id="rescheduleDate" class="date-hero" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
+            </div>
+            <div class="chip-row">
+                <button type="button" class="chip" onclick="setRescheduleOffset(0)">Hoje</button>
+                <button type="button" class="chip" onclick="setRescheduleOffset(1)">Amanhã</button>
+                <button type="button" class="chip" onclick="setRescheduleOffset(2)">+2 dias</button>
+                <button type="button" class="chip" onclick="setRescheduleOffset(7)">+7 dias</button>
+            </div>
+        </div>
+        <button class="btn-submit btn-hero" onclick="saveReschedule(this)">Salvar nova data</button>
+    </div>
+</div>
+
+<!-- ===================== MODAL: SAIR DO APP ===================== -->
+<div class="modal-overlay" id="exitModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Sair do app?</h3>
+            <button class="btn-close" onclick="cancelExit()" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="confirm-message">Deseja fechar a agenda?</p>
+        <p class="confirm-message hidden" id="exitHint">Toque em <strong>voltar</strong> mais uma vez para sair.</p>
+        <div class="form-row">
+            <button class="btn-secondary" style="flex:1;" onclick="cancelExit()">Cancelar</button>
+            <button class="btn-submit" style="flex:1;" onclick="confirmExit()">OK</button>
         </div>
     </div>
 </div>
@@ -317,11 +401,11 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Instalar Aplicativo</h3>
-            <button class="btn-close" onclick="closeModals()">&times;</button>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
         <p class="confirm-message">No iPhone/iPad: toque no botão <strong>Compartilhar</strong> e depois em <strong>"Adicionar à Tela de Início"</strong>.</p>
         <p class="confirm-message">No Android/Chrome: toque no menu (⋮) e depois em <strong>"Adicionar à tela inicial"</strong> ou <strong>"Instalar app"</strong>.</p>
-        <button class="btn-submit" onclick="closeModals()">Entendi</button>
+        <button class="btn-submit" onclick="closeTopModal()">Entendi</button>
     </div>
 </div>
 

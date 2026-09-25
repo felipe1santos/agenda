@@ -23,7 +23,7 @@ const ICON_LIST = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" s
 const TOKEN_KEY = 'agendaToken';
 
 // ===================== Estado ===================== //
-let state = { config: { anchorDate: null, cycleLength: 9 }, specials: {}, tasks: [], projects: [], shopping: {}, shoppingCategories: [], recurring: [], abonos: {} };
+let state = { config: { anchorDate: null, cycleLength: 9 }, specials: {}, tasks: [], projects: [], shopping: {}, shoppingCategories: [], recurring: [], abonos: {}, vacations: [] };
 let currentDate = new Date();
 let currentShoppingCat = null;
 let viewMode = localStorage.getItem('agendaViewMode') || 'list';
@@ -104,6 +104,39 @@ function parseTime24(v) {
   return pad(h) + ':' + pad(min);
 }
 
+// Id gerado no cliente (crypto.randomUUID só existe em contexto seguro)
+function genId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+// Trava contra envio duplicado: enquanto a ação `key` está em andamento,
+// novos cliques são ignorados e o botão fica desabilitado.
+const inFlight = new Set();
+async function runOnce(key, btn, fn) {
+  if (inFlight.has(key)) return;
+  inFlight.add(key);
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('is-busy');
+    if (btn.classList.contains('btn-submit')) btn.textContent = 'Aguarde...';
+  }
+  try {
+    return await fn();
+  } finally {
+    inFlight.delete(key);
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('is-busy');
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
 function taskOccursOn(t, dateStr) {
   if (!t.date) return false;
   const end = t.endDate && t.endDate > t.date ? t.endDate : t.date;
@@ -178,8 +211,10 @@ async function boot() {
     state = await api('/api/state');
     $('#loginScreen').classList.add('hidden');
     $('#app').classList.remove('hidden');
+    if (!state.vacations) state.vacations = [];
     applyViewMode();
     switchTab('calendar');
+    armBackGuard();
     if (!state.config.anchorDate) openConfigModal();
     checkDueNotifications();
   } catch (e) {
@@ -197,9 +232,15 @@ function getCycleIndex(dateString) {
   return ((diffDays % cfg.cycleLength) + cfg.cycleLength) % cfg.cycleLength;
 }
 
+function vacationFor(dateString) {
+  return (state.vacations || []).find((v) => dateString >= v.start && dateString <= v.end) || null;
+}
+
 function getShiftInfo(dateString) {
   const idx = getCycleIndex(dateString);
   if (idx === -1) return { label: 'Sem Escala', class: 'shift-folga', type: 'folga', cycleIndex: -1 };
+  const vac = vacationFor(dateString);
+  if (vac) return { label: 'Férias', class: 'shift-folga', type: 'folga', cycleIndex: idx, ferias: vac };
   if (idx === 0) {
     if (state.abonos[dateString]) return { label: 'Folga (Abono)', class: 'shift-folga', type: 'folga', cycleIndex: idx, abono: true };
     return { label: 'Trabalho (06h-22h)', class: 'shift-dia', type: 'trabalho', cycleIndex: idx };
@@ -212,7 +253,7 @@ function isFolgaDay(dateStr) {
   return s.type === 'folga' && s.cycleIndex !== -1;
 }
 
-// Folga prolongada: sequência de folgas conectadas que contém pelo menos um abono
+// Folga prolongada: sequência de folgas conectadas que contém pelo menos um abono ou férias
 function isExtendedFolga(dateStr) {
   if (!isFolgaDay(dateStr)) return false;
   let start = dateStr;
@@ -220,7 +261,7 @@ function isExtendedFolga(dateStr) {
   let d = start;
   let hasAbono = false;
   while (isFolgaDay(d)) {
-    if (state.abonos[d]) hasAbono = true;
+    if (state.abonos[d] || vacationFor(d)) hasAbono = true;
     d = addDays(d, 1);
   }
   return hasAbono;
@@ -238,7 +279,6 @@ function switchTab(tab) {
   $('#monthNav').classList.toggle('hidden', tab !== 'calendar');
   $('#tabTitle').classList.toggle('hidden', tab === 'calendar');
   $('#btnViewToggle').classList.toggle('hidden', tab !== 'calendar');
-  $('#btnSpecialsList').classList.toggle('hidden', tab !== 'calendar');
   if (TAB_TITLES[tab]) $('#tabTitle').textContent = TAB_TITLES[tab];
 
   $('#fabBtn').classList.toggle('hidden', tab === 'shopping');
@@ -271,15 +311,42 @@ function onFabClick() {
 }
 
 // ===================== Modais ===================== //
-function openModal(id) { $('#' + id).classList.add('active'); }
-function closeModals() { document.querySelectorAll('.modal-overlay').forEach((m) => m.classList.remove('active')); }
+// Pilha de modais: o último aberto fica sempre por cima (z-index crescente),
+// então abrir "Editar" de dentro da lista do dia não cai atrás dela.
+const modalStack = [];
+
+function openModal(id) {
+  const el = $('#' + id);
+  if (!modalStack.includes(id)) modalStack.push(id);
+  el.style.zIndex = 30 + modalStack.indexOf(id);
+  el.classList.add('active');
+}
+
+function closeModal(id) {
+  const idx = modalStack.indexOf(id);
+  if (idx >= 0) modalStack.splice(idx, 1);
+  $('#' + id).classList.remove('active');
+  armBackGuard();
+}
+
+function closeTopModal() {
+  if (modalStack.length) closeModal(modalStack[modalStack.length - 1]);
+}
+
+function closeModals() {
+  modalStack.length = 0;
+  document.querySelectorAll('.modal-overlay').forEach((m) => m.classList.remove('active'));
+  armBackGuard();
+}
+
+function isModalOpen(id) { return modalStack.includes(id); }
 
 function showConfirm(message, onConfirm) {
   $('#confirmMessage').textContent = message;
   const oldBtn = $('#confirmBtn');
   const newBtn = oldBtn.cloneNode(true);
   oldBtn.parentNode.replaceChild(newBtn, oldBtn);
-  newBtn.addEventListener('click', onConfirm);
+  newBtn.addEventListener('click', () => runOnce('confirm', newBtn, onConfirm));
   openModal('confirmModal');
 }
 
@@ -345,6 +412,7 @@ function getDayTags(dateStr, shift) {
   const tags = [];
   if (shift.type === 'trabalho') tags.push({ label: 'Trabalho', cls: 'day-tag-dia' });
   if (shift.abono) tags.push({ label: 'Abono ✓', cls: 'day-tag-folga' });
+  if (shift.ferias) tags.push({ label: 'Férias', cls: 'day-tag-folga' });
 
   if (state.specials[dateStr]) {
     const isEmendando = shift.cycleIndex === 0;
@@ -432,6 +500,9 @@ function renderDayBody(dateStr, shift) {
   if (shift.abono) {
     html += `<div class="abono-alert" onclick="event.stopPropagation(); openAbonoForDate('${dateStr}')">ABONO — dia de folga</div>`;
   }
+  if (shift.ferias) {
+    html += `<div class="abono-alert" onclick="event.stopPropagation(); openVacationModal()">FÉRIAS — ${formatDateBR(shift.ferias.start)} até ${formatDateBR(shift.ferias.end)}</div>`;
+  }
   const sp = state.specials[dateStr];
   if (sp) {
     const isEmendando = shift.cycleIndex === 0;
@@ -455,7 +526,7 @@ function renderDayBody(dateStr, shift) {
         ? `<button onclick="event.stopPropagation(); reopenTask('${t.id}')">↩ Reabrir</button>`
         : `<button onclick="event.stopPropagation(); completeTask('${t.id}')">✓</button>
            <button onclick="event.stopPropagation(); openTaskModal('${t.id}')">✏️</button>
-           <button onclick="event.stopPropagation(); sendToBacklog('${t.id}')">↩</button>`;
+           <button title="Nova data" onclick="event.stopPropagation(); openRescheduleModal('${t.id}')">📅</button>`;
       html += `
         <div class="event-item ${t.done ? 'done' : ''}${t.done ? '' : prioClass(t.priority)}">
           ${t.done ? '' : prioIcon(t.priority)}
@@ -476,6 +547,12 @@ function renderDayBody(dateStr, shift) {
 
 function openDaySheet(dateStr) {
   currentSheetDate = dateStr;
+  renderDaySheet();
+  openModal('daySheetModal');
+}
+
+function renderDaySheet() {
+  const dateStr = currentSheetDate;
   const dateObj = new Date(dateStr + 'T00:00:00');
   const shift = getShiftInfo(dateStr);
   $('#daySheetTitle').textContent = `${dateObj.getDate()} de ${monthNames[dateObj.getMonth()]} - ${dayNames[dateObj.getDay()]}`;
@@ -485,11 +562,14 @@ function openDaySheet(dateStr) {
   html += body || '<p class="confirm-message">Nada registrado neste dia.</p>';
 
   $('#daySheetBody').innerHTML = html;
-  openModal('daySheetModal');
+}
+
+// Atualiza a lista do dia (se aberta) sem mexer na ordem dos modais
+function refreshDaySheet() {
+  if (isModalOpen('daySheetModal') && currentSheetDate) renderDaySheet();
 }
 
 function openAddRecordForDay(type) {
-  closeModals();
   if (type === 'abono') openAbonoModal(currentSheetDate);
   else openTaskModal(null, currentSheetDate);
 }
@@ -505,23 +585,99 @@ function openAbonoModal(dateStr) {
   openModal('abonoModal');
 }
 
-async function saveAbono() {
-  const dateStr = brToISO($('#inputDate').value);
-  if (!dateStr) return alert('Data inválida. Use o formato dd/mm/aaaa.');
-  if (getCycleIndex(dateStr) !== 0) return alert('Abono só pode ser marcado em um dia de TRABALHO.');
-  await api(`/api/abonos/${dateStr}`, 'PUT');
-  state.abonos[dateStr] = true;
-  closeModals();
-  renderAll();
+function nextWorkDay(fromDate) {
+  let d = fromDate;
+  for (let i = 0; i < (state.config.cycleLength || 1) + 1; i++) {
+    if (getCycleIndex(d) === 0 && !state.abonos[d]) return d;
+    d = addDays(d, 1);
+  }
+  return fromDate;
 }
 
-async function deleteAbonoFromModal() {
-  const dateStr = brToISO($('#inputDate').value);
-  if (!dateStr || !state.abonos[dateStr]) return closeModals();
-  await api(`/api/abonos/${dateStr}`, 'DELETE');
-  delete state.abonos[dateStr];
-  closeModals();
-  renderAll();
+function saveAbono(btn) {
+  return runOnce('abono', btn, async () => {
+    const dateStr = brToISO($('#inputDate').value);
+    if (!dateStr) return alert('Data inválida. Use o formato dd/mm/aaaa.');
+    if (getCycleIndex(dateStr) !== 0) return alert('Abono só pode ser marcado em um dia de TRABALHO.');
+    await api(`/api/abonos/${dateStr}`, 'PUT');
+    state.abonos[dateStr] = true;
+    closeModal('abonoModal');
+    renderAll();
+    refreshDaySheet();
+  });
+}
+
+function deleteAbonoFromModal(btn) {
+  return runOnce('abono', btn, async () => {
+    const dateStr = brToISO($('#inputDate').value);
+    if (!dateStr || !state.abonos[dateStr]) return closeModal('abonoModal');
+    await api(`/api/abonos/${dateStr}`, 'DELETE');
+    delete state.abonos[dateStr];
+    closeModal('abonoModal');
+    renderAll();
+    refreshDaySheet();
+  });
+}
+
+// ===================== Menu de Ajustes (engrenagem) ===================== //
+function openSettingsMenu() { openModal('settingsModal'); }
+
+function openFromMenu(what) {
+  closeModal('settingsModal');
+  if (what === 'abono') openAbonoModal(nextWorkDay(todayISO()));
+  else if (what === 'vacation') openVacationModal();
+  else if (what === 'specials') openSpecialsListModal();
+  else if (what === 'config') openConfigModal();
+}
+
+// ===================== Férias ===================== //
+function openVacationModal() {
+  $('#vacationStart').value = '';
+  $('#vacationEnd').value = '';
+  renderVacationList();
+  openModal('vacationModal');
+}
+
+function renderVacationList() {
+  const el = $('#vacationList');
+  if (!state.vacations.length) { el.innerHTML = '<div class="empty-state">Nenhum período de férias.</div>'; return; }
+  el.innerHTML = state.vacations.map((v) => `
+    <div class="list-item">
+      <div class="item-content">
+        <div class="item-title">${formatDateBRFull(v.start)} até ${formatDateBRFull(v.end)}</div>
+      </div>
+      <div class="item-actions">
+        <button class="icon-btn" title="Excluir" onclick="confirmDeleteVacation('${v.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+function saveVacation(btn) {
+  return runOnce('vacation', btn, async () => {
+    const start = brToISO($('#vacationStart').value);
+    const end = brToISO($('#vacationEnd').value);
+    if (!start || !end) return alert('Informe início e fim no formato dd/mm/aaaa.');
+    if (end < start) return alert('O fim deve ser igual ou depois do início.');
+    const created = await api('/api/vacations', 'POST', { start, end });
+    if (!state.vacations.some((v) => v.id === created.id)) state.vacations.push(created);
+    state.vacations.sort((a, b) => a.start.localeCompare(b.start));
+    $('#vacationStart').value = '';
+    $('#vacationEnd').value = '';
+    renderVacationList();
+    renderAll();
+  });
+}
+
+function confirmDeleteVacation(id) {
+  const v = state.vacations.find((x) => x.id === id);
+  if (!v) return;
+  showConfirm(`Excluir as férias de ${formatDateBRFull(v.start)} até ${formatDateBRFull(v.end)}?`, async () => {
+    await api(`/api/vacations/${id}`, 'DELETE');
+    state.vacations = state.vacations.filter((x) => x.id !== id);
+    closeModal('confirmModal');
+    renderVacationList();
+    renderAll();
+  });
 }
 
 // ===================== Lista de Especiais ===================== //
@@ -558,7 +714,8 @@ function confirmDeleteSpecial(dateStr) {
   showConfirm(`Excluir o dia especial de ${formatDateBRFull(dateStr)}?`, async () => {
     await api(`/api/specials/${dateStr}`, 'DELETE');
     delete state.specials[dateStr];
-    closeModals();
+    closeModal('confirmModal');
+    renderSpecialsList();
     renderAll();
   });
 }
@@ -574,6 +731,12 @@ function renderTasks() {
   renderTaskList('tasksUpcoming', upcoming, 'upcoming');
   renderTaskList('tasksBacklog', backlog, 'backlog');
   renderTaskList('tasksDoneWrap', done, 'done');
+  $('#backlogSection').classList.toggle('hidden', !backlog.length);
+  $('#btnClearDone').classList.toggle('hidden', !done.length);
+}
+
+function isOverdue(t) {
+  return !t.done && t.date && (t.endDate && t.endDate > t.date ? t.endDate : t.date) < todayISO();
 }
 
 function renderTaskList(containerId, items, context) {
@@ -584,6 +747,7 @@ function renderTaskList(containerId, items, context) {
 
 function taskListItemHtml(t, context) {
   const metaParts = [];
+  if (isOverdue(t)) metaParts.push('<span class="overdue-tag">⚠ Vencida</span>');
   if (t.date) metaParts.push(formatDateBR(t.date) + (t.endDate && t.endDate !== t.date ? ' até ' + formatDateBR(t.endDate) : ''));
   if (t.time) metaParts.push('⏰ ' + t.time);
   if (t.priority) metaParts.push(PRIORITY_LABELS[t.priority]);
@@ -593,10 +757,10 @@ function taskListItemHtml(t, context) {
   if (context === 'upcoming') {
     actions = `
       <button class="icon-btn" title="Editar" onclick="openTaskModal('${t.id}')">✏️</button>
-      <button class="icon-btn" title="Sem data" onclick="sendToBacklog('${t.id}')">↩</button>`;
+      <button class="icon-btn" title="Nova data" onclick="openRescheduleModal('${t.id}')">📅</button>`;
   } else if (context === 'backlog') {
     actions = `
-      <button class="icon-btn" title="Definir data" onclick="openTaskModal('${t.id}')">📅</button>
+      <button class="icon-btn" title="Definir data" onclick="openRescheduleModal('${t.id}')">📅</button>
       <button class="icon-btn" title="Excluir" onclick="confirmDeleteTask('${t.id}')">🗑</button>`;
   } else {
     actions = `
@@ -707,8 +871,13 @@ function toggleTaskAdvanced(forceOpen) {
   $('#taskAdvancedBtn').classList.toggle('open', open);
 }
 
+// Id usado no POST de criação: o mesmo em todos os reenvios deste formulário,
+// então o servidor nunca cria a tarefa duas vezes.
+let taskDraftId = null;
+
 function openTaskModal(id, defaultDate) {
   const task = id ? state.tasks.find((t) => t.id === id) : null;
+  taskDraftId = task ? null : genId();
   $('#taskModalTitle').textContent = task ? 'Editar Tarefa' : 'Nova Tarefa';
   $('#taskModalId').value = task ? task.id : '';
   $('#taskModalTitleInput').value = task ? task.title : '';
@@ -728,7 +897,11 @@ function openTaskModal(id, defaultDate) {
   setTimeout(() => $('#taskModalTitleInput').focus(), 120);
 }
 
-async function saveTaskModal() {
+function saveTaskModal(btn) {
+  return runOnce('task-save', btn, doSaveTaskModal);
+}
+
+async function doSaveTaskModal() {
   const id = $('#taskModalId').value;
   const title = $('#taskModalTitleInput').value.trim();
   if (!title) return alert('Dê um título à tarefa.');
@@ -756,32 +929,87 @@ async function saveTaskModal() {
     const idx = state.tasks.findIndex((t) => t.id === id);
     state.tasks[idx] = updated;
   } else {
-    const created = await api('/api/tasks', 'POST', { title, date, endDate, time, priority, obs, notify });
-    state.tasks.push(created);
+    const created = await api('/api/tasks', 'POST', { id: taskDraftId, title, date, endDate, time, priority, obs, notify });
+    if (!state.tasks.some((t) => t.id === created.id)) state.tasks.push(created);
   }
 
-  closeModals();
+  closeModal('taskModal');
   renderAll();
+  refreshDaySheet();
 }
 
-async function patchTask(id, fields) {
-  const updated = await api(`/api/tasks/${id}`, 'PUT', fields);
-  const idx = state.tasks.findIndex((t) => t.id === id);
-  state.tasks[idx] = updated;
-  renderAll();
-  if ($('#daySheetModal').classList.contains('active') && currentSheetDate) openDaySheet(currentSheetDate);
+function patchTask(id, fields) {
+  return runOnce('task:' + id, null, async () => {
+    const updated = await api(`/api/tasks/${id}`, 'PUT', fields);
+    const idx = state.tasks.findIndex((t) => t.id === id);
+    state.tasks[idx] = updated;
+    renderAll();
+    refreshDaySheet();
+  });
 }
 
 function completeTask(id) { return patchTask(id, { done: true }); }
 function reopenTask(id) { return patchTask(id, { done: false }); }
-function sendToBacklog(id) { return patchTask(id, { date: null, endDate: null, done: false }); }
+
+// ---- Reagendar: escolhe a nova data na hora, sem mandar pra "depois" ---- //
+function openRescheduleModal(id) {
+  const task = state.tasks.find((t) => t.id === id);
+  if (!task) return;
+  $('#rescheduleId').value = id;
+  $('#rescheduleTaskTitle').textContent = task.title;
+  const suggestion = task.date && task.date >= todayISO() ? task.date : addDays(todayISO(), 1);
+  $('#rescheduleDate').value = isoToBR(suggestion);
+  openModal('rescheduleModal');
+}
+
+function setRescheduleOffset(n) {
+  $('#rescheduleDate').value = isoToBR(addDays(todayISO(), n));
+}
+
+function daysBetween(a, b) {
+  return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+
+function saveReschedule(btn) {
+  return runOnce('reschedule', btn, async () => {
+    const id = $('#rescheduleId').value;
+    const task = state.tasks.find((t) => t.id === id);
+    if (!task) return closeModal('rescheduleModal');
+    const date = brToISO($('#rescheduleDate').value);
+    if (!date) return alert('Data inválida. Use o formato dd/mm/aaaa.');
+    // Tarefa com período: mantém a mesma duração a partir da nova data
+    const endDate = task.date && task.endDate && task.endDate > task.date
+      ? addDays(date, daysBetween(task.date, task.endDate))
+      : null;
+    const updated = await api(`/api/tasks/${id}`, 'PUT', { date, endDate, done: false });
+    const idx = state.tasks.findIndex((t) => t.id === id);
+    state.tasks[idx] = updated;
+    closeModal('rescheduleModal');
+    renderAll();
+    refreshDaySheet();
+  });
+}
 
 function confirmDeleteTask(id) {
   const task = state.tasks.find((t) => t.id === id);
   showConfirm(`Excluir a tarefa "${task.title}"?`, async () => {
     await api(`/api/tasks/${id}`, 'DELETE');
     state.tasks = state.tasks.filter((t) => t.id !== id);
-    closeModals();
+    closeModal('confirmModal');
+    renderAll();
+  });
+}
+
+// Exclusão definitiva (também do banco) de todas as tarefas sem data ou concluídas
+function confirmBulkDeleteTasks(scope) {
+  const match = scope === 'backlog' ? (t) => !t.date && !t.done : (t) => t.done;
+  const count = state.tasks.filter(match).length;
+  if (!count) return;
+  const what = scope === 'backlog' ? 'sem data' : 'concluídas';
+  showConfirm(`Apagar definitivamente ${count} tarefa(s) ${what}? Isso não pode ser desfeito.`, async () => {
+    await api('/api/tasks/bulk-delete', 'POST', { scope });
+    state.tasks = state.tasks.filter((t) => !match(t));
+    closeModal('confirmModal');
     renderAll();
   });
 }
@@ -844,7 +1072,11 @@ function replaceProject(updated) {
   if (idx >= 0) state.projects[idx] = updated; else state.projects.push(updated);
 }
 
-async function addStep(projectId, inputEl) {
+function addStep(projectId, inputEl) {
+  return runOnce('step-add:' + projectId, null, () => doAddStep(projectId, inputEl));
+}
+
+async function doAddStep(projectId, inputEl) {
   const title = inputEl.value.trim();
   if (!title) return;
   const updated = await api(`/api/projects/${projectId}/steps`, 'POST', { title });
@@ -852,13 +1084,21 @@ async function addStep(projectId, inputEl) {
   renderAll();
 }
 
-async function toggleStep(pid, sid, done) {
+function toggleStep(pid, sid, done) {
+  return runOnce('step:' + sid, null, () => doToggleStep(pid, sid, done));
+}
+
+async function doToggleStep(pid, sid, done) {
   const updated = await api(`/api/projects/${pid}/steps/${sid}`, 'PUT', { done });
   replaceProject(updated);
   renderAll();
 }
 
-async function deleteStep(pid, sid) {
+function deleteStep(pid, sid) {
+  return runOnce('step:' + sid, null, () => doDeleteStep(pid, sid));
+}
+
+async function doDeleteStep(pid, sid) {
   const updated = await api(`/api/projects/${pid}/steps/${sid}`, 'DELETE');
   replaceProject(updated);
   renderAll();
@@ -874,7 +1114,11 @@ async function editStepObs(pid, sid) {
   renderAll();
 }
 
-async function reopenProject(id) {
+function reopenProject(id) {
+  return runOnce('project:' + id, null, () => doReopenProject(id));
+}
+
+async function doReopenProject(id) {
   const updated = await api(`/api/projects/${id}`, 'PUT', { done: false });
   replaceProject(updated);
   renderAll();
@@ -890,7 +1134,11 @@ function confirmDeleteProject(id) {
   });
 }
 
-async function saveProject() {
+function saveProject(btn) {
+  return runOnce('project-save', btn, () => doSaveProject());
+}
+
+async function doSaveProject() {
   const title = $('#projectTitle').value.trim();
   if (!title) return alert('Dê um título ao projeto.');
   const created = await api('/api/projects', 'POST', { title });
@@ -963,7 +1211,11 @@ function renderShoppingCategory(el, catId) {
 function openShoppingCat(id) { currentShoppingCat = id; renderShopping(); }
 function backToFolders() { currentShoppingCat = null; renderShopping(); }
 
-async function addShoppingCategory() {
+function addShoppingCategory() {
+  return runOnce('shop-cat-add', null, () => doAddShoppingCategory());
+}
+
+async function doAddShoppingCategory() {
   const name = window.prompt('Nome da nova categoria:');
   if (!name || !name.trim()) return;
   const created = await api('/api/shopping-categories', 'POST', { name: name.trim() });
@@ -994,7 +1246,11 @@ function deleteShoppingCategory(id) {
   });
 }
 
-async function addShoppingItem(category) {
+function addShoppingItem(category) {
+  return runOnce('shop-add:' + category, null, () => doAddShoppingItem(category));
+}
+
+async function doAddShoppingItem(category) {
   const input = $('#shoppingItemInput');
   const name = input.value.trim();
   if (!name) return;
@@ -1005,7 +1261,11 @@ async function addShoppingItem(category) {
   renderShopping();
 }
 
-async function toggleShoppingItem(id, done) {
+function toggleShoppingItem(id, done) {
+  return runOnce('shop:' + id, null, () => doToggleShoppingItem(id, done));
+}
+
+async function doToggleShoppingItem(id, done) {
   const updated = await api(`/api/shopping/${id}`, 'PUT', { done });
   for (const cat of Object.keys(state.shopping)) {
     const idx = state.shopping[cat].findIndex((i) => i.id === id);
@@ -1058,14 +1318,18 @@ function renderRecurring() {
   }).join('');
 }
 
-async function toggleRecurringMonth(id, mk) {
+function toggleRecurringMonth(id, mk) {
+  return runOnce('rec:' + id, null, () => doToggleRecurringMonth(id, mk));
+}
+
+async function doToggleRecurringMonth(id, mk) {
   const r = state.recurring.find((x) => x.id === id);
   if (!r) return;
   const newVal = r.lastDoneMonth === mk ? null : mk;
   const updated = await api(`/api/recurring/${id}`, 'PUT', { lastDoneMonth: newVal });
   Object.assign(r, updated);
   renderAll();
-  if ($('#daySheetModal').classList.contains('active') && currentSheetDate) openDaySheet(currentSheetDate);
+  refreshDaySheet();
 }
 
 function openRecurringModal(id) {
@@ -1078,7 +1342,11 @@ function openRecurringModal(id) {
   openModal('recurringModal');
 }
 
-async function saveRecurringModal() {
+function saveRecurringModal(btn) {
+  return runOnce('rec-save', btn, () => doSaveRecurringModal());
+}
+
+async function doSaveRecurringModal() {
   const id = $('#recurringModalId').value;
   const title = $('#recurringTitleInput').value.trim();
   if (!title) return alert('Dê um título ao lembrete.');
@@ -1115,7 +1383,11 @@ function openConfigModal() {
   openModal('configModal');
 }
 
-async function saveConfig() {
+function saveConfig(btn) {
+  return runOnce('config', btn, () => doSaveConfig());
+}
+
+async function doSaveConfig() {
   const anchorDate = brToISO($('#anchorDiaDate').value);
   if (!anchorDate) return alert('Informe a data de um dia de TRABALHO no formato dd/mm/aaaa.');
   const folgaDays = parseInt($('#folgaDays').value, 10);
@@ -1185,6 +1457,45 @@ async function checkDueNotifications() {
   }
 
   if (newlyNotified.length) saveNotifiedToday([...notified, ...newlyNotified]);
+}
+
+// ===================== Botão voltar (celular) ===================== //
+// Mantém sempre uma entrada "guarda" no histórico acima da página. Cada
+// "voltar" consome a guarda e dispara popstate: fechamos o modal do topo,
+// saímos da pasta, voltamos pro Calendário... e só na tela inicial
+// perguntamos se quer sair (sem re-armar, então o próximo voltar fecha o app).
+let backGuardArmed = false;
+
+function armBackGuard() {
+  if (backGuardArmed || !getToken() || $('#app').classList.contains('hidden')) return;
+  history.pushState({ agendaGuard: true }, '');
+  backGuardArmed = true;
+}
+
+function handleBack() {
+  if (modalStack.length) { closeTopModal(); return true; }
+  if (currentTab === 'shopping' && currentShoppingCat) { backToFolders(); return true; }
+  if (currentTab !== 'calendar') { switchTab('calendar'); return true; }
+  return false;
+}
+
+window.addEventListener('popstate', () => {
+  backGuardArmed = false;
+  if (!getToken() || $('#app').classList.contains('hidden')) return;
+  if (handleBack()) { armBackGuard(); return; }
+  $('#exitHint').classList.add('hidden');
+  openModal('exitModal');
+});
+
+function cancelExit() {
+  closeModal('exitModal');
+}
+
+function confirmExit() {
+  window.close();
+  // Se o navegador não deixar fechar via script, o histórico já está na
+  // primeira entrada: mais um "voltar" do sistema fecha o app.
+  setTimeout(() => $('#exitHint').classList.remove('hidden'), 300);
 }
 
 // ===================== PWA ===================== //
