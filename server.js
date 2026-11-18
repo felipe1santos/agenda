@@ -83,6 +83,14 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS atestados (
+    id TEXT PRIMARY KEY,
+    start TEXT NOT NULL,
+    end TEXT NOT NULL,
+    obs TEXT,
+    created_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS vacations (
     id TEXT PRIMARY KEY,
     start TEXT NOT NULL,
@@ -130,6 +138,7 @@ for (const stmt of [
   'ALTER TABLE tasks ADD COLUMN time TEXT',
   'ALTER TABLE tasks ADD COLUMN address TEXT',
   'ALTER TABLE tasks ADD COLUMN has_photo INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE tasks ADD COLUMN phone TEXT',
   'ALTER TABLE recurring_items ADD COLUMN done_months TEXT',
 ]) {
   try { db.exec(stmt); } catch (e) { /* coluna já existe */ }
@@ -301,7 +310,10 @@ app.get('/api/state', (req, res) => {
   const vacations = db.prepare('SELECT * FROM vacations ORDER BY start ASC').all()
     .map((v) => ({ id: v.id, start: v.start, end: v.end }));
 
-  res.json({ config, specials, tasks, projects, shopping, shoppingCategories, recurring, abonos, vacations });
+  const atestados = db.prepare('SELECT * FROM atestados ORDER BY start ASC').all()
+    .map((a) => ({ id: a.id, start: a.start, end: a.end, obs: a.obs || null }));
+
+  res.json({ config, specials, tasks, projects, shopping, shoppingCategories, recurring, abonos, vacations, atestados });
 });
 
 // ---------- Config ----------
@@ -341,6 +353,12 @@ app.delete('/api/specials/:date', (req, res) => {
 // ---------- Tasks ----------
 const validTime = (v) => (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : null);
 const CLIENT_ID = /^[0-9a-f-]{16,64}$/i;
+// Telefone: guarda só dígitos (e + inicial); vazio vira null
+const optPhone = (v) => {
+  if (typeof v !== 'string') return null;
+  const clean = v.trim().replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 20);
+  return clean.replace(/\D/g, '').length >= 8 ? clean : null;
+};
 
 // Fotos das tarefas ficam em arquivo (no mesmo volume do banco), não no SQLite
 const PHOTO_DIR = path.join(path.dirname(DB_PATH), 'photos');
@@ -351,7 +369,7 @@ const removePhoto = (id) => { try { fs.unlinkSync(photoPath(id)); } catch (e) { 
 function serializeTask(t) {
   return {
     id: t.id, title: t.title, date: t.date, endDate: t.end_date, time: t.time,
-    priority: t.priority, obs: t.obs, address: t.address || null,
+    priority: t.priority, obs: t.obs, address: t.address || null, phone: t.phone || null,
     hasPhoto: !!t.has_photo, done: !!t.done, notify: !!t.notify,
   };
 }
@@ -372,14 +390,15 @@ function mergeTaskFields(existing, body) {
     priority: has('priority') ? optPriority(body.priority) : existing.priority,
     obs: has('obs') ? optText(body.obs) : existing.obs,
     address: has('address') ? optText(body.address, 300) : existing.address,
+    phone: has('phone') ? optPhone(body.phone) : existing.phone,
     done: has('done') ? toBool(body.done) : existing.done,
     notify: has('notify') ? toBool(body.notify) : existing.notify,
   };
 }
 
 function updateTask(id, f) {
-  db.prepare('UPDATE tasks SET title = ?, date = ?, end_date = ?, time = ?, priority = ?, obs = ?, address = ?, done = ?, notify = ? WHERE id = ?')
-    .run(f.title, f.date, f.endDate, f.time, f.priority, f.obs, f.address, f.done, f.notify, id);
+  db.prepare('UPDATE tasks SET title = ?, date = ?, end_date = ?, time = ?, priority = ?, obs = ?, address = ?, phone = ?, done = ?, notify = ? WHERE id = ?')
+    .run(f.title, f.date, f.endDate, f.time, f.priority, f.obs, f.address, f.phone, f.done, f.notify, id);
 }
 
 app.post('/api/tasks', (req, res) => {
@@ -398,9 +417,9 @@ app.post('/api/tasks', (req, res) => {
   const end = date && endRaw && endRaw > date ? endRaw : null;
   const id = validClientId || uuid();
   db.prepare(`
-    INSERT INTO tasks (id, title, date, end_date, time, priority, obs, address, done, created_at, notify)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-  `).run(id, title, date, end, validTime(body.time), optPriority(body.priority), optText(body.obs), optText(body.address, 300), now(), toBool(body.notify));
+    INSERT INTO tasks (id, title, date, end_date, time, priority, obs, address, phone, done, created_at, notify)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+  `).run(id, title, date, end, validTime(body.time), optPriority(body.priority), optText(body.obs), optText(body.address, 300), optPhone(body.phone), now(), toBool(body.notify));
   res.status(201).json(serializeTask(getTask(id)));
 });
 
@@ -597,6 +616,25 @@ app.post('/api/vacations', (req, res) => {
 
 app.delete('/api/vacations/:id', (req, res) => {
   db.prepare('DELETE FROM vacations WHERE id = ?').run(req.params.id);
+  res.status(204).end();
+});
+
+// ---------- Atestados médicos (período) ----------
+app.post('/api/atestados', (req, res) => {
+  const { start, end } = req.body || {};
+  if (typeof start !== 'string' || typeof end !== 'string' || !ISO_DATE.test(start) || !ISO_DATE.test(end) || end < start) {
+    return res.status(400).json({ error: 'período inválido' });
+  }
+  const obs = optText((req.body || {}).obs, 300);
+  const dup = db.prepare('SELECT * FROM atestados WHERE start = ? AND end = ?').get(start, end);
+  if (dup) return res.status(200).json({ id: dup.id, start: dup.start, end: dup.end, obs: dup.obs || null });
+  const id = uuid();
+  db.prepare('INSERT INTO atestados (id, start, end, obs, created_at) VALUES (?, ?, ?, ?, ?)').run(id, start, end, obs, now());
+  res.status(201).json({ id, start, end, obs });
+});
+
+app.delete('/api/atestados/:id', (req, res) => {
+  db.prepare('DELETE FROM atestados WHERE id = ?').run(req.params.id);
   res.status(204).end();
 });
 

@@ -20,10 +20,16 @@ const dayAbbr = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const ICON_GRID = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`;
 const ICON_LIST = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>`;
 
+const ICON_PENCIL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>`;
+const ICON_CHECK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+const ICON_PLUS = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+const ICON_CHEVRON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+const ICON_TRASH = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`;
+
 const TOKEN_KEY = 'agendaToken';
 
 // ===================== Estado ===================== //
-let state = { config: { anchorDate: null, cycleLength: 9 }, specials: {}, tasks: [], projects: [], shopping: {}, shoppingCategories: [], recurring: [], abonos: {}, vacations: [] };
+let state = { config: { anchorDate: null, cycleLength: 9 }, specials: {}, tasks: [], projects: [], shopping: {}, shoppingCategories: [], recurring: [], abonos: {}, vacations: [], atestados: [] };
 let currentDate = new Date();
 let currentShoppingCat = null;
 let viewMode = localStorage.getItem('agendaViewMode') || 'list';
@@ -234,6 +240,7 @@ async function boot() {
     $('#bootScreen').classList.add('hidden');
     $('#app').classList.remove('hidden');
     if (!state.vacations) state.vacations = [];
+    if (!state.atestados) state.atestados = [];
     applyViewMode();
     switchTab('calendar');
     armBackGuard();
@@ -261,16 +268,28 @@ function vacationFor(dateString) {
   return (state.vacations || []).find((v) => dateString >= v.start && dateString <= v.end) || null;
 }
 
+function atestadoFor(dateString) {
+  return (state.atestados || []).find((a) => dateString >= a.start && dateString <= a.end) || null;
+}
+
+// Férias cujo dia de retorno ao trabalho (dia seguinte ao último dia) é esta data
+function vacationReturnFor(dateString) {
+  return (state.vacations || []).find((v) => addDays(v.end, 1) === dateString) || null;
+}
+
 function getShiftInfo(dateString) {
   const idx = getCycleIndex(dateString);
-  if (idx === -1) return { label: 'Sem Escala', class: 'shift-folga', type: 'folga', cycleIndex: -1 };
+  const atestado = atestadoFor(dateString);
+  if (idx === -1) return { label: 'Sem Escala', class: 'shift-folga', type: 'folga', cycleIndex: -1, atestado };
   const vac = vacationFor(dateString);
   if (vac) return { label: 'Férias', class: 'shift-folga', type: 'folga', cycleIndex: idx, ferias: vac };
   if (idx === 0) {
     if (state.abonos[dateString]) return { label: 'Folga (Abono)', class: 'shift-folga', type: 'folga', cycleIndex: idx, abono: true };
+    // Atestado cobre o dia de trabalho: tag "Trabalho" cinza e quebrada
+    if (atestado) return { label: 'Trabalho', class: 'shift-broken', type: 'atestado', cycleIndex: idx, atestado };
     return { label: 'Trabalho (06h-22h)', class: 'shift-dia', type: 'trabalho', cycleIndex: idx };
   }
-  return { label: 'Folga', class: 'shift-folga', type: 'folga', cycleIndex: idx };
+  return { label: 'Folga', class: 'shift-folga', type: 'folga', cycleIndex: idx, atestado };
 }
 
 function isFolgaDay(dateStr) {
@@ -330,8 +349,8 @@ function toggleCollapse(id) {
 // ===================== FAB ===================== //
 function onFabClick() {
   if (currentTab === 'calendar') openTaskModal(null, todayISO());
-  else if (currentTab === 'tasks') openTaskModal(null, todayISO());
-  else if (currentTab === 'projects') openModal('projectModal');
+  else if (currentTab === 'tasks') openTaskModal(null, ''); // aba Tarefas: nasce sem data
+  else if (currentTab === 'projects') openProjectModal(null);
   else if (currentTab === 'recurring') openRecurringModal(null);
 }
 
@@ -437,9 +456,18 @@ function shouldShowShiftBadge(dateStr, shift) {
   return !(shift.type === 'folga' && state.specials[dateStr]);
 }
 
+function sortDayTasks(list) {
+  return list.sort((a, b) => (a.done - b.done)
+    || (a.time || '99:99').localeCompare(b.time || '99:99')
+    || (b.priority || 0) - (a.priority || 0));
+}
+
 function getDayTags(dateStr, shift) {
   const tags = [];
   if (shift.type === 'trabalho') tags.push({ label: 'Trabalho', cls: 'day-tag-dia' });
+  if (shift.type === 'atestado') tags.push({ label: 'Trabalho', cls: 'day-tag-broken' });
+  if (shift.atestado) tags.push({ label: '🩺 Atestado', cls: 'day-tag-atestado' });
+  if (vacationReturnFor(dateStr)) tags.push({ label: '🔙 Retorno', cls: 'day-tag-return' });
   if (shift.abono) tags.push({ label: 'Abono ✓', cls: 'day-tag-folga' });
   if (shift.ferias) tags.push({ label: 'Férias', cls: 'day-tag-folga' });
 
@@ -454,16 +482,19 @@ function getDayTags(dateStr, shift) {
     tags.push({ label: '🔁 ' + r.title, cls: pending ? 'day-tag-recurring-pending' : 'day-tag-recurring-done' });
   });
 
-  state.tasks
-    .filter((t) => taskOccursOn(t, dateStr) && !t.done)
-    .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || (b.priority || 0) - (a.priority || 0))
-    .forEach((t) => {
+  // Concluídas continuam no dia (verde claro); pendentes em cinza claro
+  // (ou na cor da prioridade, quando tiver)
+  sortDayTasks(state.tasks.filter((t) => taskOccursOn(t, dateStr))).forEach((t) => {
+    if (t.done) {
+      tags.push({ label: '✓ ' + (t.time ? t.time + ' ' : '') + t.title, cls: 'day-tag-task day-tag-task-done' });
+    } else {
       tags.push({
         label: (t.time ? t.time + ' ' : '') + t.title,
         cls: 'day-tag-task' + prioClass(t.priority),
         icon: prioIcon(t.priority),
       });
-    });
+    }
+  });
 
   return tags;
 }
@@ -473,7 +504,8 @@ function createDayCard(year, month, day, isNextMonth) {
   const dateObj = new Date(year, month, day);
   const shift = getShiftInfo(dateStr);
   const isToday = dateStr === todayISO();
-  const extended = isExtendedFolga(dateStr);
+  // Dia de retorno das férias nunca fica verde: é dia de voltar ao trabalho
+  const extended = isExtendedFolga(dateStr) && !vacationReturnFor(dateStr);
 
   const card = document.createElement('div');
   card.className = `day-card ${isNextMonth ? 'next-month' : ''} ${isToday ? 'is-today' : ''} ${extended ? 'folga-estendida' : ''}`;
@@ -536,7 +568,15 @@ function renderDayBody(dateStr, shift) {
     html += `<div class="abono-alert" onclick="event.stopPropagation(); openAbonoForDate('${dateStr}')">ABONO — dia de folga</div>`;
   }
   if (shift.ferias) {
-    html += `<div class="abono-alert" onclick="event.stopPropagation(); openVacationModal()">FÉRIAS — ${formatDateBR(shift.ferias.start)} até ${formatDateBR(shift.ferias.end)}</div>`;
+    html += `<div class="abono-alert" onclick="event.stopPropagation(); openVacationModal()">FÉRIAS — ${formatDateBR(shift.ferias.start)} até ${formatDateBR(shift.ferias.end)} · retorno ${formatDateBR(addDays(shift.ferias.end, 1))}</div>`;
+  }
+  if (vacationReturnFor(dateStr)) {
+    html += `<div class="return-alert" onclick="event.stopPropagation(); openVacationModal()">🔙 RETORNO AO TRABALHO — fim das férias</div>`;
+  }
+  if (shift.atestado) {
+    const a = shift.atestado;
+    const period = a.start === a.end ? formatDateBR(a.start) : `${formatDateBR(a.start)} até ${formatDateBR(a.end)}`;
+    html += `<div class="atestado-alert" onclick="event.stopPropagation(); openAtestadoModal()">🩺 ATESTADO — ${period}${a.obs ? ` · ${escapeHtml(a.obs)}` : ''}</div>`;
   }
   const sp = state.specials[dateStr];
   if (sp) {
@@ -550,9 +590,7 @@ function renderDayBody(dateStr, shift) {
     html += `<div class="recurring-alert ${pending ? 'pending' : 'done'}" onclick="event.stopPropagation(); toggleRecurringMonth('${r.id}','${mk}')">🔁 ${escapeHtml(r.title)} ${pending ? '<span class="recurring-hint">toque p/ confirmar</span>' : '✓ feito'}</div>`;
   });
 
-  const dayTasks = state.tasks
-    .filter((t) => taskOccursOn(t, dateStr))
-    .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || (b.priority || 0) - (a.priority || 0));
+  const dayTasks = sortDayTasks(state.tasks.filter((t) => taskOccursOn(t, dateStr)));
   if (dayTasks.length) {
     html += '<div class="event-list">';
     dayTasks.forEach((t) => {
@@ -563,7 +601,7 @@ function renderDayBody(dateStr, shift) {
            <button onclick="event.stopPropagation(); openTaskModal('${t.id}')">✏️</button>
            <button title="Nova data" onclick="event.stopPropagation(); openRescheduleModal('${t.id}')">📅</button>`;
       html += `
-        <div class="event-item ${t.done ? 'done' : ''}${t.done ? '' : prioClass(t.priority)}">
+        <div class="event-item ${t.done ? 'done' : 'pending'}${t.done ? '' : prioClass(t.priority)}">
           ${t.done ? '' : prioIcon(t.priority)}
           <div class="event-details">
             <span class="event-title">${t.time ? `<span class="event-time">${t.time}</span> ` : ''}${escapeHtml(t.title)}</span>
@@ -667,16 +705,32 @@ function openFromMenu(what) {
   closeModal('settingsModal');
   if (what === 'abono') openAbonoModal(nextWorkDay(todayISO()));
   else if (what === 'vacation') openVacationModal();
+  else if (what === 'atestado') openAtestadoModal();
   else if (what === 'specials') openSpecialsListModal();
   else if (what === 'config') openConfigModal();
 }
 
 // ===================== Férias ===================== //
+// O usuário informa o 1º dia de férias e o dia de RETORNO ao trabalho.
+// No banco fica o último dia de férias (retorno - 1), compatível com o que já existia.
 function openVacationModal() {
   $('#vacationStart').value = '';
-  $('#vacationEnd').value = '';
+  $('#vacationReturn').value = '';
+  syncVacationHint();
   renderVacationList();
   openModal('vacationModal');
+}
+
+function syncVacationHint() {
+  const start = brToISO($('#vacationStart').value);
+  const ret = brToISO($('#vacationReturn').value);
+  const el = $('#vacationHint');
+  if (!start || !ret) { el.textContent = ''; return; }
+  if (ret <= start) { el.textContent = '⚠ O retorno deve ser depois do 1º dia de férias.'; return; }
+  const days = daysBetween(start, ret);
+  const retDow = dayNames[new Date(ret + 'T00:00:00').getDay()];
+  const work = getCycleIndex(ret) === 0 ? '' : ' (pela escala esse dia seria folga)';
+  el.textContent = `${days} dia(s) de férias · último dia ${formatDateBRFull(addDays(ret, -1))} · volta ${retDow}${work}`;
 }
 
 function renderVacationList() {
@@ -686,9 +740,10 @@ function renderVacationList() {
     <div class="list-item">
       <div class="item-content">
         <div class="item-title">${formatDateBRFull(v.start)} até ${formatDateBRFull(v.end)}</div>
+        <div class="item-meta"><span class="return-pill">🔙 Retorno: ${formatDateBRFull(addDays(v.end, 1))} · ${dayNames[new Date(addDays(v.end, 1) + 'T00:00:00').getDay()]}</span></div>
       </div>
       <div class="item-actions">
-        <button class="icon-btn" title="Excluir" onclick="confirmDeleteVacation('${v.id}')">🗑</button>
+        <button class="icon-ghost" title="Excluir" aria-label="Excluir férias" onclick="confirmDeleteVacation('${v.id}')">${ICON_TRASH}</button>
       </div>
     </div>`).join('');
 }
@@ -696,14 +751,16 @@ function renderVacationList() {
 function saveVacation(btn) {
   return runOnce('vacation', btn, async () => {
     const start = brToISO($('#vacationStart').value);
-    const end = brToISO($('#vacationEnd').value);
-    if (!start || !end) return alert('Informe início e fim no formato dd/mm/aaaa.');
-    if (end < start) return alert('O fim deve ser igual ou depois do início.');
+    const ret = brToISO($('#vacationReturn').value);
+    if (!start || !ret) return alert('Informe o 1º dia de férias e o dia de retorno no formato dd/mm/aaaa.');
+    if (ret <= start) return alert('O retorno ao trabalho deve ser depois do 1º dia de férias.');
+    const end = addDays(ret, -1);
     const created = await api('/api/vacations', 'POST', { start, end });
     if (!state.vacations.some((v) => v.id === created.id)) state.vacations.push(created);
     state.vacations.sort((a, b) => a.start.localeCompare(b.start));
     $('#vacationStart').value = '';
-    $('#vacationEnd').value = '';
+    $('#vacationReturn').value = '';
+    syncVacationHint();
     renderVacationList();
     renderAll();
     refreshDaySheet();
@@ -718,6 +775,90 @@ function confirmDeleteVacation(id) {
     state.vacations = state.vacations.filter((x) => x.id !== id);
     closeModal('confirmModal');
     renderVacationList();
+    renderAll();
+    refreshDaySheet();
+  });
+}
+
+// ===================== Atestado médico ===================== //
+let atestadoDays = null; // chip de dias escolhido (recalcula o fim ao mudar o início)
+
+function openAtestadoModal() {
+  $('#atestadoStart').value = isoToBR(todayISO());
+  $('#atestadoObs').value = '';
+  setAtestadoDays(1);
+  renderAtestadoList();
+  openModal('atestadoModal');
+}
+
+function setAtestadoDays(n) {
+  atestadoDays = n;
+  syncAtestadoEnd();
+}
+
+// Início mudou ou chip escolhido: fim = início + (dias - 1)
+function syncAtestadoEnd() {
+  const start = brToISO($('#atestadoStart').value);
+  if (start && atestadoDays) $('#atestadoEnd').value = isoToBR(addDays(start, atestadoDays - 1));
+  syncAtestadoChips(true);
+}
+
+// Fim digitado à mão: acende o chip correspondente (se houver)
+function syncAtestadoChips(fromChip) {
+  const start = brToISO($('#atestadoStart').value);
+  const end = brToISO($('#atestadoEnd').value);
+  const days = start && end && end >= start ? daysBetween(start, end) + 1 : null;
+  if (!fromChip) atestadoDays = null;
+  document.querySelectorAll('#atestadoDaysRow .chip').forEach((c) => c.classList.toggle('active', days != null && +c.dataset.days === days));
+  const hint = $('#atestadoHint');
+  if (!days) { hint.textContent = end && start ? '⚠ O último dia deve ser igual ou depois do início.' : ''; return; }
+  let work = 0;
+  for (let d = start; d <= end; d = addDays(d, 1)) if (getCycleIndex(d) === 0) work++;
+  hint.textContent = `${days} dia(s) de atestado · ${work} dia(s) de trabalho cobertos · volta em ${formatDateBRFull(addDays(end, 1))}`;
+}
+
+function renderAtestadoList() {
+  const el = $('#atestadoList');
+  if (!state.atestados.length) { el.innerHTML = '<div class="empty-state">Nenhum atestado cadastrado.</div>'; return; }
+  el.innerHTML = [...state.atestados].reverse().map((a) => {
+    const days = daysBetween(a.start, a.end) + 1;
+    return `
+    <div class="list-item">
+      <div class="item-content">
+        <div class="item-title">${a.start === a.end ? formatDateBRFull(a.start) : `${formatDateBRFull(a.start)} até ${formatDateBRFull(a.end)}`}</div>
+        <div class="item-meta"><span>${days} dia(s)</span>${a.obs ? `<span>· ${escapeHtml(a.obs)}</span>` : ''}</div>
+      </div>
+      <div class="item-actions">
+        <button class="icon-ghost" title="Excluir" aria-label="Excluir atestado" onclick="confirmDeleteAtestado('${a.id}')">${ICON_TRASH}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function saveAtestado(btn) {
+  return runOnce('atestado', btn, async () => {
+    const start = brToISO($('#atestadoStart').value);
+    const end = brToISO($('#atestadoEnd').value);
+    if (!start || !end) return alert('Informe o início e o último dia no formato dd/mm/aaaa.');
+    if (end < start) return alert('O último dia deve ser igual ou depois do início.');
+    const obs = $('#atestadoObs').value.trim() || null;
+    const created = await api('/api/atestados', 'POST', { start, end, obs });
+    if (!state.atestados.some((a) => a.id === created.id)) state.atestados.push(created);
+    state.atestados.sort((a, b) => a.start.localeCompare(b.start));
+    closeModal('atestadoModal');
+    renderAll();
+    refreshDaySheet();
+  });
+}
+
+function confirmDeleteAtestado(id) {
+  const a = state.atestados.find((x) => x.id === id);
+  if (!a) return;
+  showConfirm(`Excluir o atestado de ${formatDateBRFull(a.start)} até ${formatDateBRFull(a.end)}?`, async () => {
+    await api(`/api/atestados/${id}`, 'DELETE');
+    state.atestados = state.atestados.filter((x) => x.id !== id);
+    closeModal('confirmModal');
+    renderAtestadoList();
     renderAll();
     refreshDaySheet();
   });
@@ -764,18 +905,23 @@ function confirmDeleteSpecial(dateStr) {
 }
 
 // ===================== Tarefas ===================== //
+// Aba Tarefas: só as atrasadas (data já passou e não concluídas) e as sem data.
+// As de hoje em diante aparecem no calendário.
 function renderTasks() {
-  const upcoming = state.tasks
-    .filter((t) => t.date && !t.done)
+  const overdue = state.tasks
+    .filter(isOverdue)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '99:99').localeCompare(b.time || '99:99'));
   const backlog = state.tasks.filter((t) => !t.date && !t.done);
-  const done = state.tasks.filter((t) => t.done);
 
-  renderTaskList('tasksUpcoming', upcoming, 'upcoming');
-  renderTaskList('tasksBacklog', backlog, 'backlog');
-  renderTaskList('tasksDoneWrap', done, 'done');
-  $('#backlogSection').classList.toggle('hidden', !backlog.length);
-  $('#btnClearDone').classList.toggle('hidden', !done.length);
+  renderTaskList('tasksOverdue', overdue, 'upcoming');
+  $('#overdueSection').classList.toggle('hidden', !overdue.length);
+  const el = $('#tasksBacklog');
+  if (!backlog.length) {
+    el.innerHTML = '<div class="empty-state">Nenhuma tarefa sem data.<br>Toque em <strong>+</strong> para anotar algo e definir a data depois.</div>';
+  } else {
+    renderTaskList('tasksBacklog', backlog, 'backlog');
+  }
+  $('#btnClearBacklog').classList.toggle('hidden', backlog.length < 2);
 }
 
 function isOverdue(t) {
@@ -804,6 +950,7 @@ function taskListItemHtml(t, context) {
       <button class="icon-btn" title="Nova data" onclick="openRescheduleModal('${t.id}')">📅</button>`;
   } else if (context === 'backlog') {
     actions = `
+      <button class="icon-btn" title="Editar" onclick="openTaskModal('${t.id}')">✏️</button>
       <button class="icon-btn" title="Definir data" onclick="openRescheduleModal('${t.id}')">📅</button>
       <button class="icon-btn" title="Excluir" onclick="confirmDeleteTask('${t.id}')">🗑</button>`;
   } else {
@@ -1009,10 +1156,34 @@ function pickMinute(min) {
   renderClock();
 }
 
-function clearTaskTime() {
-  $('#taskModalTime').value = '';
+// O relógio fica num modal próprio: só abre ao tocar em "Definir horário"
+// e o valor só vai para a tarefa depois de "Confirmar horário".
+function openTimePicker() {
+  $('#taskModalTime').value = $('#taskTimeValue').value;
   resetClock();
+  openModal('timePickerModal');
 }
+
+function confirmTimePicker() {
+  const raw = $('#taskModalTime').value.trim();
+  let time = '';
+  if (raw) {
+    time = parseTime24(raw);
+    if (!time) return alert('Horário inválido. Use o formato 24h, ex: 08:00 ou 23:59.');
+  }
+  setTaskTimeValue(time);
+  closeModal('timePickerModal');
+}
+
+function setTaskTimeValue(time) {
+  $('#taskTimeValue').value = time || '';
+  const btn = $('#taskTimeBtn');
+  btn.textContent = time ? '⏰ ' + time : '⏰ Definir horário';
+  btn.classList.toggle('has-value', !!time);
+  $('#taskTimeClear').classList.toggle('hidden', !time);
+}
+
+function clearTaskTimeValue() { setTaskTimeValue(''); }
 
 // Chamado ao digitar o horário no campo
 function syncTimePicker() {
@@ -1114,6 +1285,20 @@ async function openPhotoViewer(id) {
   $('#photoModalImg').src = await loadTaskPhotoUrl(id);
 }
 
+// wa.me precisa do número com DDI; número BR sem DDI (10–11 dígitos) ganha 55
+function whatsappUrl(phone) {
+  let digits = String(phone || '').replace(/\D/g, '');
+  if (!String(phone).trim().startsWith('+') && (digits.length === 10 || digits.length === 11)) digits = '55' + digits;
+  return 'https://wa.me/' + digits;
+}
+
+function formatPhoneBR(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return phone;
+}
+
 function mapsUrl(address) {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address);
 }
@@ -1122,6 +1307,7 @@ function mapsUrl(address) {
 function taskExtrasHtml(t) {
   let html = '';
   if (t.address) html += `<a class="task-link" href="${mapsUrl(t.address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 ${escapeHtml(t.address)}</a>`;
+  if (t.phone) html += `<a class="task-link task-link-wa" href="${whatsappUrl(t.phone)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">💬 ${escapeHtml(formatPhoneBR(t.phone))}</a>`;
   if (t.hasPhoto) html += `<button type="button" class="task-link" onclick="event.stopPropagation(); openPhotoViewer('${t.id}')">📷 Ver foto</button>`;
   return html;
 }
@@ -1136,12 +1322,14 @@ function openTaskModal(id, defaultDate) {
   $('#taskModalTitle').textContent = task ? 'Editar Tarefa' : 'Nova Tarefa';
   $('#taskModalId').value = task ? task.id : '';
   $('#taskModalTitleInput').value = task ? task.title : '';
-  $('#taskModalDate').value = task ? isoToBR(task.date) : isoToBR(defaultDate || todayISO());
+  // defaultDate '' = sem data (aba Tarefas); undefined = hoje
+  $('#taskModalDate').value = task ? isoToBR(task.date) : isoToBR(defaultDate === undefined ? todayISO() : defaultDate);
   $('#taskModalEndDate').value = task ? isoToBR(task.endDate) : '';
-  $('#taskModalTime').value = task ? (task.time || '') : '';
+  setTaskTimeValue(task ? task.time : '');
   $('#taskModalPriority').value = task && task.priority ? String(task.priority) : '';
   $('#taskModalObs').value = task ? (task.obs || '') : '';
   $('#taskModalAddress').value = task ? (task.address || '') : '';
+  $('#taskModalPhone').value = task ? (task.phone ? formatPhoneBR(task.phone) : '') : '';
   $('#taskModalNotify').checked = task ? !!task.notify : true;
 
   taskPhotoDraft = { dataUrl: null, remove: false, existing: !!(task && task.hasPhoto) };
@@ -1152,10 +1340,9 @@ function openTaskModal(id, defaultDate) {
     }).catch(() => {});
   }
 
-  resetClock();
   syncPriorityPicker();
   // Abre as opções extras só quando a tarefa já usa alguma delas
-  toggleTaskAdvanced(!!(task && (task.endDate || task.obs || task.address || task.hasPhoto)));
+  toggleTaskAdvanced(!!(task && (task.endDate || task.hasPhoto)));
 
   openModal('taskModal');
   setTimeout(() => $('#taskModalTitleInput').focus(), 120);
@@ -1182,24 +1369,22 @@ async function doSaveTaskModal() {
   const endDate = endBR ? brToISO(endBR) : null;
   if (endBR && !endDate) return alert('Data final inválida. Use o formato dd/mm/aaaa.');
   if (date && endDate && endDate < date) return alert('A data final deve ser igual ou depois da data inicial.');
-  const timeBR = $('#taskModalTime').value.trim();
-  let time = null;
-  if (timeBR) {
-    time = parseTime24(timeBR);
-    if (!time) return alert('Horário inválido. Use o formato 24h, ex: 08:00 ou 23:59.');
-  }
+  const time = $('#taskTimeValue').value || null;
   const priorityVal = $('#taskModalPriority').value;
   const priority = priorityVal ? parseInt(priorityVal, 10) : null;
   const obs = $('#taskModalObs').value.trim() || null;
   const address = $('#taskModalAddress').value.trim() || null;
+  const phoneRaw = $('#taskModalPhone').value.trim();
+  const phone = phoneRaw || null;
+  if (phone && phone.replace(/\D/g, '').length < 8) return alert('Telefone inválido. Use DDD + número, ex: (11) 91234-5678.');
   const notify = $('#taskModalNotify').checked;
   if (notify) ensureNotificationPermission();
 
   let saved;
   if (id) {
-    saved = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, time, priority, obs, address, notify });
+    saved = await api(`/api/tasks/${id}`, 'PUT', { title, date, endDate, time, priority, obs, address, phone, notify });
   } else {
-    saved = await api('/api/tasks', 'POST', { id: draftId, title, date, endDate, time, priority, obs, address, notify });
+    saved = await api('/api/tasks', 'POST', { id: draftId, title, date, endDate, time, priority, obs, address, phone, notify });
   }
 
   if (photo.dataUrl) {
@@ -1331,36 +1516,35 @@ function projectCardHtml(p) {
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
   const stepsHtml = p.steps.map((s) => `
-    <div class="list-item step-item ${s.done ? 'done' : ''}">
-      <button class="check-circle" onclick="toggleStep('${p.id}','${s.id}',${!s.done})">${s.done ? '✓' : ''}</button>
-      <div class="item-content">
-        <div class="item-title">${escapeHtml(s.title)}</div>
-        ${s.obs ? `<div class="item-obs">${escapeHtml(s.obs)}</div>` : ''}
-      </div>
-      <div class="item-actions">
-        <button class="icon-btn" title="Observação" onclick="editStepObs('${p.id}','${s.id}')">📝</button>
-        <button class="icon-btn" title="Excluir" onclick="deleteStep('${p.id}','${s.id}')">🗑</button>
-      </div>
+    <div class="step-row ${s.done ? 'done' : ''}">
+      <button class="step-check" role="checkbox" aria-checked="${s.done}" aria-label="${s.done ? 'Desmarcar' : 'Concluir'}: ${escapeHtml(s.title)}" onclick="toggleStep('${p.id}','${s.id}',${!s.done})">${s.done ? ICON_CHECK : ''}</button>
+      <button class="step-body" onclick="openStepModal('${p.id}','${s.id}')" aria-label="Editar item ${escapeHtml(s.title)}">
+        <span class="step-title">${escapeHtml(s.title)}</span>
+        ${s.obs ? `<span class="step-desc">${escapeHtml(s.obs)}</span>` : ''}
+        <span class="step-edit" aria-hidden="true">${ICON_CHEVRON}</span>
+      </button>
     </div>
   `).join('');
 
   return `
-    <div class="project-card ${p.done ? 'done' : ''}">
-      <div class="project-header">
-        <span class="project-title">${escapeHtml(p.title)}</span>
-        <div class="item-actions">
-          ${p.done ? `<button class="icon-btn" title="Reabrir" onclick="reopenProject('${p.id}')">↩</button>` : ''}
-          <button class="icon-btn" title="Excluir" onclick="confirmDeleteProject('${p.id}')">🗑</button>
+    <article class="project-card ${p.done ? 'done' : ''}">
+      <header class="project-header">
+        <div class="project-head-text">
+          <h4 class="project-title">${escapeHtml(p.title)}</h4>
+          <span class="project-sub">${total ? `${doneCount} de ${total} ${total === 1 ? 'item' : 'itens'}` : 'Sem itens ainda'}</span>
         </div>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div class="progress-label">${doneCount}/${total} etapas</div>
-      <div class="step-list">${stepsHtml}</div>
+        <span class="project-pct ${pct === 100 ? 'full' : ''}">${pct}%</span>
+        ${p.done ? `<button class="icon-ghost" title="Reabrir" aria-label="Reabrir projeto" onclick="reopenProject('${p.id}')">↩</button>` : ''}
+        <button class="icon-ghost" title="Editar projeto" aria-label="Editar projeto" onclick="openProjectModal('${p.id}')">${ICON_PENCIL}</button>
+      </header>
+      <div class="progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${pct}%"></div></div>
+      ${total ? `<div class="step-list">${stepsHtml}</div>` : ''}
       <div class="add-step-row">
-        <input type="text" class="form-control step-input" data-pid="${p.id}" placeholder="+ etapa" onkeydown="if(event.key==='Enter') addStep('${p.id}', this)">
-        <button class="btn-add" onclick="addStep('${p.id}', this.previousElementSibling)">+</button>
+        <span class="add-step-icon" aria-hidden="true">${ICON_PLUS}</span>
+        <input type="text" class="step-input" data-pid="${p.id}" placeholder="Adicionar item" aria-label="Adicionar item em ${escapeHtml(p.title)}" enterkeyhint="done" onkeydown="if(event.key==='Enter') addStep('${p.id}', this)">
+        <button class="add-step-btn" aria-label="Adicionar" onclick="addStep('${p.id}', this.previousElementSibling)">Adicionar</button>
       </div>
-    </div>
+    </article>
   `;
 }
 
@@ -1409,14 +1593,47 @@ async function doDeleteStep(pid, sid) {
   renderAll();
 }
 
-async function editStepObs(pid, sid) {
+// ---- Modal do item (título, descrição, concluído, excluir) ---- //
+function openStepModal(pid, sid) {
   const project = state.projects.find((p) => p.id === pid);
   const step = project && project.steps.find((s) => s.id === sid);
-  const obs = window.prompt('Observação da etapa:', (step && step.obs) || '');
-  if (obs === null) return;
-  const updated = await api(`/api/projects/${pid}/steps/${sid}`, 'PUT', { obs: obs.trim() || null });
-  replaceProject(updated);
-  renderAll();
+  if (!step) return;
+  $('#stepModalPid').value = pid;
+  $('#stepModalSid').value = sid;
+  $('#stepModalTitle').textContent = 'Editar item';
+  $('#stepModalProject').textContent = project.title;
+  $('#stepTitleInput').value = step.title;
+  $('#stepObsInput').value = step.obs || '';
+  $('#stepDoneInput').checked = !!step.done;
+  openModal('stepModal');
+}
+
+function saveStepModal(btn) {
+  return runOnce('step-modal', btn, async () => {
+    const pid = $('#stepModalPid').value;
+    const sid = $('#stepModalSid').value;
+    const title = $('#stepTitleInput').value.trim();
+    if (!title) return alert('Dê um nome ao item.');
+    const obs = $('#stepObsInput').value.trim() || null;
+    const done = $('#stepDoneInput').checked;
+    const updated = await api(`/api/projects/${pid}/steps/${sid}`, 'PUT', { title, obs, done });
+    replaceProject(updated);
+    closeModal('stepModal');
+    renderAll();
+  });
+}
+
+function deleteStepFromModal() {
+  const pid = $('#stepModalPid').value;
+  const sid = $('#stepModalSid').value;
+  const title = $('#stepTitleInput').value.trim() || 'este item';
+  showConfirm(`Excluir "${title}"?`, async () => {
+    const updated = await api(`/api/projects/${pid}/steps/${sid}`, 'DELETE');
+    replaceProject(updated);
+    closeModal('confirmModal');
+    closeModal('stepModal');
+    renderAll();
+  });
 }
 
 function reopenProject(id) {
@@ -1439,18 +1656,52 @@ function confirmDeleteProject(id) {
   });
 }
 
+function openProjectModal(id) {
+  const p = id ? state.projects.find((x) => x.id === id) : null;
+  $('#projectModalId').value = p ? p.id : '';
+  $('#projectModalTitle').textContent = p ? 'Editar projeto' : 'Novo projeto';
+  $('#projectTitle').value = p ? p.title : '';
+  $('#projectDangerZone').classList.toggle('hidden', !p);
+  openModal('projectModal');
+  setTimeout(() => $('#projectTitle').focus(), 120);
+}
+
 function saveProject(btn) {
   return runOnce('project-save', btn, () => doSaveProject());
 }
 
 async function doSaveProject() {
+  const id = $('#projectModalId').value;
   const title = $('#projectTitle').value.trim();
-  if (!title) return alert('Dê um título ao projeto.');
-  const created = await api('/api/projects', 'POST', { title });
-  state.projects.push(created);
+  if (!title) return alert('Dê um nome ao projeto.');
+  if (id) {
+    replaceProject(await api(`/api/projects/${id}`, 'PUT', { title }));
+  } else {
+    state.projects.push(await api('/api/projects', 'POST', { title }));
+  }
   $('#projectTitle').value = '';
-  closeModals();
+  closeModal('projectModal');
   renderAll();
+}
+
+// ===================== Modal de texto (substitui window.prompt) ===================== //
+function openTextModal({ title, label, value = '', placeholder = '', onSave }) {
+  $('#textModalTitle').textContent = title;
+  $('#textModalLabel').textContent = label;
+  const input = $('#textModalInput');
+  input.value = value;
+  input.placeholder = placeholder;
+  const oldBtn = $('#textModalSave');
+  const btn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(btn, oldBtn);
+  btn.addEventListener('click', () => runOnce('text-modal', btn, async () => {
+    const v = input.value.trim();
+    if (!v) return input.focus();
+    await onSave(v);
+    closeModal('textModal');
+  }));
+  openModal('textModal');
+  setTimeout(() => input.focus(), 120);
 }
 
 // ===================== Compras ===================== //
@@ -1483,43 +1734,61 @@ function renderShoppingFolders(el) {
   const folders = state.shoppingCategories.map((c) => {
     const items = state.shopping[c.id] || [];
     const pending = items.filter((i) => !i.done).length;
+    const done = items.length - pending;
     return `
-      <button class="folder-card" onclick="openShoppingCat('${c.id}')">
-        <span class="folder-icon">📁</span>
+      <button class="folder-card ${pending ? 'has-pending' : ''}" onclick="openShoppingCat('${c.id}')">
+        <span class="folder-icon" aria-hidden="true">${pending ? '🛒' : '📁'}</span>
         <span class="folder-name">${escapeHtml(c.name)}</span>
-        <span class="folder-count">${pending ? pending + ' pendente(s)' : 'vazia'}</span>
+        <span class="folder-count">${pending ? `<strong>${pending}</strong> pendente(s)` : (done ? 'tudo comprado ✓' : 'vazia')}</span>
       </button>`;
   }).join('');
   el.innerHTML = `
-    <div class="folder-grid">${folders || '<div class="empty-state">Nenhuma categoria.</div>'}</div>
-    <button class="btn-submit" style="margin-top:16px" onclick="addShoppingCategory()">+ Nova categoria</button>
+    <div class="list-section">
+      <div class="section-head">
+        <h3 class="section-title">Categorias</h3>
+        <button class="btn-ghost" onclick="addShoppingCategory()">+ Nova categoria</button>
+      </div>
+      ${folders ? `<div class="folder-grid">${folders}</div>` : '<div class="empty-state">Nenhuma categoria. Toque em <strong>+ Nova categoria</strong>.</div>'}
+    </div>
   `;
+}
+
+function shoppingRowHtml(it) {
+  return `
+    <div class="shop-row ${it.done ? 'done' : ''}">
+      <button class="step-check" role="checkbox" aria-checked="${it.done}" aria-label="${it.done ? 'Desmarcar' : 'Marcar'} ${escapeHtml(it.name)}" onclick="toggleShoppingItem('${it.id}',${!it.done})">${it.done ? ICON_CHECK : ''}</button>
+      <span class="shop-name" onclick="toggleShoppingItem('${it.id}',${!it.done})">${escapeHtml(it.name)}</span>
+      <button class="icon-ghost" title="Excluir" aria-label="Excluir ${escapeHtml(it.name)}" onclick="deleteShoppingItem('${it.id}')">${ICON_TRASH}</button>
+    </div>`;
 }
 
 function renderShoppingCategory(el, catId) {
   const items = state.shopping[catId] || [];
-  const itemsHtml = items.length
-    ? items.map((it) => `
-        <div class="list-item ${it.done ? 'done' : ''}">
-          <button class="check-circle" onclick="toggleShoppingItem('${it.id}',${!it.done})">${it.done ? '✓' : ''}</button>
-          <div class="item-content"><div class="item-title">${escapeHtml(it.name)}</div></div>
-          <div class="item-actions"><button class="icon-btn" title="Excluir" onclick="deleteShoppingItem('${it.id}')">🗑</button></div>
-        </div>`).join('')
-    : '<div class="empty-state">Lista vazia.</div>';
+  const pending = items.filter((i) => !i.done);
+  const done = items.filter((i) => i.done);
 
   el.innerHTML = `
-    <div class="shopping-header">
-      <button class="icon-btn" title="Voltar" onclick="backToFolders()">◀</button>
-      <h3 class="section-title" style="flex:1">${escapeHtml(catName(catId))}</h3>
-      <button class="icon-btn" title="Renomear" onclick="renameShoppingCategory('${catId}')">✏️</button>
-      <button class="icon-btn" title="Excluir categoria" onclick="deleteShoppingCategory('${catId}')">🗑</button>
+    <div class="list-section">
+      <div class="shopping-header">
+        <button class="icon-ghost" title="Voltar" aria-label="Voltar para categorias" onclick="backToFolders()">◀</button>
+        <h3 class="shop-cat-title">${escapeHtml(catName(catId))}</h3>
+        <button class="icon-ghost" title="Renomear" aria-label="Renomear categoria" onclick="renameShoppingCategory('${catId}')">${ICON_PENCIL}</button>
+        <button class="icon-ghost icon-ghost-danger" title="Excluir categoria" aria-label="Excluir categoria" onclick="deleteShoppingCategory('${catId}')">${ICON_TRASH}</button>
+      </div>
+      <div class="add-step-row shop-add">
+        <span class="add-step-icon" aria-hidden="true">${ICON_PLUS}</span>
+        <input type="text" id="shoppingItemInput" class="step-input" placeholder="Adicionar item" aria-label="Adicionar item" enterkeyhint="done" onkeydown="if(event.key==='Enter') addShoppingItem('${catId}')">
+        <button class="add-step-btn" onclick="addShoppingItem('${catId}')">Adicionar</button>
+      </div>
+      ${items.length ? '' : '<div class="empty-state">Lista vazia.</div>'}
+      ${pending.length ? `<div class="shop-card">${pending.map(shoppingRowHtml).join('')}</div>` : ''}
+      ${done.length ? `
+        <div class="section-head" style="margin-top:16px">
+          <h3 class="section-title">No carrinho · ${done.length}</h3>
+          <button class="btn-ghost" onclick="clearShoppingDone('${catId}')">Limpar</button>
+        </div>
+        <div class="shop-card">${done.map(shoppingRowHtml).join('')}</div>` : ''}
     </div>
-    <div class="shopping-input-row">
-      <input type="text" id="shoppingItemInput" class="form-control" placeholder="Adicionar item..." onkeydown="if(event.key==='Enter') addShoppingItem('${catId}')">
-      <button class="btn-add" onclick="addShoppingItem('${catId}')">+</button>
-    </div>
-    <button class="link-btn" style="margin:4px 0 8px" onclick="clearShoppingDone('${catId}')">Limpar concluídos</button>
-    <div class="item-list">${itemsHtml}</div>
   `;
 }
 
@@ -1535,22 +1804,32 @@ function addShoppingCategory() {
   return runOnce('shop-cat-add', null, () => doAddShoppingCategory());
 }
 
-async function doAddShoppingCategory() {
-  const name = window.prompt('Nome da nova categoria:');
-  if (!name || !name.trim()) return;
-  const created = await api('/api/shopping-categories', 'POST', { name: name.trim() });
-  state.shoppingCategories.push(created);
-  state.shopping[created.id] = [];
-  renderShopping();
+function doAddShoppingCategory() {
+  openTextModal({
+    title: 'Nova categoria',
+    label: 'Nome da categoria',
+    placeholder: 'Ex: Farmácia, Casa, Pet',
+    onSave: async (name) => {
+      const created = await api('/api/shopping-categories', 'POST', { name });
+      state.shoppingCategories.push(created);
+      state.shopping[created.id] = [];
+      renderShopping();
+    },
+  });
 }
 
-async function renameShoppingCategory(id) {
-  const name = window.prompt('Novo nome da categoria:', catName(id));
-  if (!name || !name.trim()) return;
-  const updated = await api(`/api/shopping-categories/${id}`, 'PUT', { name: name.trim() });
-  const c = state.shoppingCategories.find((x) => x.id === id);
-  if (c) c.name = updated.name;
-  renderShopping();
+function renameShoppingCategory(id) {
+  openTextModal({
+    title: 'Renomear categoria',
+    label: 'Nome da categoria',
+    value: catName(id),
+    onSave: async (name) => {
+      const updated = await api(`/api/shopping-categories/${id}`, 'PUT', { name });
+      const c = state.shoppingCategories.find((x) => x.id === id);
+      if (c) c.name = updated.name;
+      renderShopping();
+    },
+  });
 }
 
 function deleteShoppingCategory(id) {

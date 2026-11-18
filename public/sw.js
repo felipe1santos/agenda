@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agenda-shell-v17';
+const CACHE_NAME = 'agenda-shell-v18';
 const SHELL_FILES = [
   '/',
   '/index.html',
@@ -9,6 +9,11 @@ const SHELL_FILES = [
   '/icons/icon-512.png',
   '/icons/icon-maskable-512.png',
   '/icons/apple-touch-icon-180.png',
+  '/icons/nav/calendar.svg',
+  '/icons/nav/tasks.svg',
+  '/icons/nav/projects.svg',
+  '/icons/nav/shopping.svg',
+  '/icons/nav/recurring.svg',
 ];
 
 self.addEventListener('install', (event) => {

@@ -67,31 +67,31 @@
         </section>
 
         <!-- ---------- TAB: TAREFAS ---------- -->
+        <!-- Só tarefas atrasadas (data passou e não concluídas) e tarefas sem data.
+             As com data de hoje em diante ficam no calendário. -->
         <section class="tab-panel hidden" id="panel-tasks">
-            <div class="list-section">
-                <h3 class="section-title">Próximas</h3>
-                <div id="tasksUpcoming" class="item-list"></div>
+            <div class="list-section hidden" id="overdueSection">
+                <div class="section-head">
+                    <h3 class="section-title">Atrasadas</h3>
+                </div>
+                <div id="tasksOverdue" class="item-list"></div>
             </div>
-            <div class="list-section hidden" id="backlogSection">
+            <div class="list-section">
                 <div class="section-head">
                     <h3 class="section-title">Sem data</h3>
-                    <button class="btn-danger-soft" onclick="confirmBulkDeleteTasks('backlog')">🗑 Apagar todas</button>
+                    <button class="btn-ghost-danger hidden" id="btnClearBacklog" onclick="confirmBulkDeleteTasks('backlog')">Apagar todas</button>
                 </div>
                 <div id="tasksBacklog" class="item-list"></div>
-            </div>
-            <div class="list-section">
-                <div class="section-head">
-                    <h3 class="section-title collapsible" onclick="toggleCollapse('tasksDoneWrap')">Concluídas <span class="chevron" id="tasksDoneWrap-chevron">▾</span></h3>
-                    <button class="btn-danger-soft hidden" id="btnClearDone" onclick="confirmBulkDeleteTasks('done')">🗑 Limpar</button>
-                </div>
-                <div id="tasksDoneWrap" class="item-list collapsed"></div>
             </div>
         </section>
 
         <!-- ---------- TAB: PROJETOS ---------- -->
         <section class="tab-panel hidden" id="panel-projects">
             <div class="list-section">
-                <h3 class="section-title">Em Andamento</h3>
+                <div class="section-head">
+                    <h3 class="section-title">Em andamento</h3>
+                    <button class="btn-ghost" onclick="openProjectModal(null)">+ Novo projeto</button>
+                </div>
                 <div id="projectsActive" class="project-list"></div>
             </div>
             <div class="list-section">
@@ -119,23 +119,23 @@
 
     <nav class="bottom-nav">
         <button class="nav-btn active" data-tab="calendar" onclick="switchTab('calendar')">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <img class="nav-icon" src="/icons/nav/calendar.svg" alt="" aria-hidden="true" width="26" height="26">
             <span>Calendário</span>
         </button>
         <button class="nav-btn" data-tab="tasks" onclick="switchTab('tasks')">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+            <img class="nav-icon" src="/icons/nav/tasks.svg" alt="" aria-hidden="true" width="26" height="26">
             <span>Tarefas</span>
         </button>
         <button class="nav-btn" data-tab="projects" onclick="switchTab('projects')">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            <img class="nav-icon" src="/icons/nav/projects.svg" alt="" aria-hidden="true" width="26" height="26">
             <span>Projetos</span>
         </button>
         <button class="nav-btn" data-tab="shopping" onclick="switchTab('shopping')">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            <img class="nav-icon" src="/icons/nav/shopping.svg" alt="" aria-hidden="true" width="26" height="26">
             <span>Lista</span>
         </button>
         <button class="nav-btn" data-tab="recurring" onclick="switchTab('recurring')">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <img class="nav-icon" src="/icons/nav/recurring.svg" alt="" aria-hidden="true" width="26" height="26">
             <span>Recorrentes</span>
         </button>
     </nav>
@@ -192,34 +192,18 @@
         </div>
         <input type="hidden" id="taskModalId">
         <input type="hidden" id="taskModalPriority">
+        <input type="hidden" id="taskTimeValue">
 
         <div class="field-card">
-            <label class="field-label">Tarefa</label>
+            <label class="field-label" for="taskModalTitleInput">Nome da tarefa</label>
             <input type="text" id="taskModalTitleInput" class="input-hero" placeholder="O que precisa fazer?" autocomplete="off">
+            <label class="field-label field-label-sub" for="taskModalObs">Descrição <span class="opt">opcional</span></label>
+            <textarea id="taskModalObs" class="input-desc" rows="2" placeholder="Detalhes, o que levar, com quem falar..."></textarea>
         </div>
 
         <div class="field-card">
             <div class="field-head">
-                <label class="field-label">Horário</label>
-                <input type="text" id="taskModalTime" class="time-hero" placeholder="--:--" inputmode="numeric" maxlength="5" oninput="maskTime24(this); syncTimePicker()">
-                <button type="button" class="chip-clear" onclick="clearTaskTime()">limpar</button>
-            </div>
-            <div class="clock-modes">
-                <button type="button" class="clock-mode active" id="clockModeHour" onclick="setClockMode('hour')">--</button>
-                <span class="clock-sep">:</span>
-                <button type="button" class="clock-mode" id="clockModeMinute" onclick="setClockMode('minute')">--</button>
-            </div>
-            <p class="clock-hint">Toque ou arraste: primeiro a hora, depois o minuto</p>
-            <div class="clock-wrap">
-                <button type="button" class="clock-ampm clock-am" id="clockAM" onclick="setMeridiem('AM')">AM</button>
-                <button type="button" class="clock-ampm clock-pm" id="clockPM" onclick="setMeridiem('PM')">PM</button>
-                <svg id="clockFace" class="clock-face" viewBox="0 0 280 280" role="img" aria-label="Relógio para escolher o horário"></svg>
-            </div>
-        </div>
-
-        <div class="field-card">
-            <div class="field-head">
-                <label class="field-label">Data</label>
+                <label class="field-label" for="taskModalDate">Data</label>
                 <input type="text" id="taskModalDate" class="date-hero" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
             </div>
             <div class="chip-row">
@@ -230,26 +214,32 @@
             </div>
         </div>
 
+        <div class="field-card field-row-card">
+            <span class="field-label">Horário</span>
+            <div class="time-row">
+                <button type="button" class="chip-clear hidden" id="taskTimeClear" onclick="clearTaskTimeValue()">limpar</button>
+                <button type="button" class="time-btn" id="taskTimeBtn" onclick="openTimePicker()">⏰ Definir horário</button>
+            </div>
+        </div>
+
         <div class="field-card">
-            <label class="field-label">Prioridade <span class="opt">opcional</span></label>
+            <label class="field-label" for="taskModalAddress">📍 Endereço <span class="opt">abre no Maps</span></label>
+            <input type="text" id="taskModalAddress" class="form-control" placeholder="Rua, número, bairro, cidade" autocomplete="street-address">
+            <label class="field-label field-label-sub" for="taskModalPhone">📞 Telefone <span class="opt">abre no WhatsApp</span></label>
+            <input type="tel" id="taskModalPhone" class="form-control" placeholder="(11) 91234-5678" autocomplete="tel" inputmode="tel" maxlength="20">
+        </div>
+
+        <div class="field-card">
+            <span class="field-label">Prioridade <span class="opt">opcional</span></span>
             <div class="prio-row" id="prioRow"></div>
         </div>
 
         <button type="button" class="expand-btn" id="taskAdvancedBtn" onclick="toggleTaskAdvanced()">Mais opções <span class="chevron">▾</span></button>
         <div id="taskAdvanced" class="hidden">
             <div class="form-group">
-                <label>Repetir até</label>
+                <label for="taskModalEndDate">Repetir até</label>
                 <input type="text" id="taskModalEndDate" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
                 <small class="hint">A tarefa aparece em todos os dias entre a data e esta data final.</small>
-            </div>
-            <div class="form-group">
-                <label>Observação</label>
-                <input type="text" id="taskModalObs" class="form-control" placeholder="Detalhes adicionais...">
-            </div>
-            <div class="form-group">
-                <label>📍 Endereço <span class="opt">opcional</span></label>
-                <input type="text" id="taskModalAddress" class="form-control" placeholder="Rua, número, bairro, cidade" autocomplete="street-address">
-                <small class="hint">Na tarefa vira um link que abre no mapa.</small>
             </div>
             <div class="form-group">
                 <label>📷 Foto <span class="opt">opcional</span></label>
@@ -264,6 +254,32 @@
         </div>
 
         <button class="btn-submit btn-hero" onclick="saveTaskModal(this)">Salvar</button>
+    </div>
+</div>
+
+<!-- ===================== MODAL: ESCOLHER HORÁRIO ===================== -->
+<div class="modal-overlay" id="timePickerModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Horário</h3>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="field-head">
+            <label class="field-label" for="taskModalTime">Digite ou use o relógio</label>
+            <input type="text" id="taskModalTime" class="time-hero" placeholder="--:--" inputmode="numeric" maxlength="5" oninput="maskTime24(this); syncTimePicker()">
+        </div>
+        <div class="clock-modes">
+            <button type="button" class="clock-mode active" id="clockModeHour" onclick="setClockMode('hour')">--</button>
+            <span class="clock-sep">:</span>
+            <button type="button" class="clock-mode" id="clockModeMinute" onclick="setClockMode('minute')">--</button>
+        </div>
+        <p class="clock-hint">Toque ou arraste: primeiro a hora, depois o minuto</p>
+        <div class="clock-wrap">
+            <button type="button" class="clock-ampm clock-am" id="clockAM" onclick="setMeridiem('AM')">AM</button>
+            <button type="button" class="clock-ampm clock-pm" id="clockPM" onclick="setMeridiem('PM')">PM</button>
+            <svg id="clockFace" class="clock-face" viewBox="0 0 280 280" role="img" aria-label="Relógio para escolher o horário"></svg>
+        </div>
+        <button class="btn-submit btn-hero" onclick="confirmTimePicker()">Confirmar horário</button>
     </div>
 </div>
 
@@ -290,18 +306,65 @@
     </div>
 </div>
 
-<!-- ===================== MODAL: NOVO PROJETO ===================== -->
+<!-- ===================== MODAL: PROJETO (criar/editar) ===================== -->
 <div class="modal-overlay" id="projectModal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Novo Projeto</h3>
+            <h3 id="projectModalTitle">Novo Projeto</h3>
             <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
-        <div class="form-group">
-            <label>Título do Projeto</label>
-            <input type="text" id="projectTitle" class="form-control" placeholder="Ex: Reformar quarto">
+        <input type="hidden" id="projectModalId">
+        <div class="field-card">
+            <label class="field-label" for="projectTitle">Nome do projeto</label>
+            <input type="text" id="projectTitle" class="input-hero" placeholder="Ex: Reformar quarto" autocomplete="off" onkeydown="if(event.key==='Enter') $('#projectSaveBtn').click()">
         </div>
-        <button class="btn-submit" onclick="saveProject(this)">Criar</button>
+        <button class="btn-submit btn-hero" id="projectSaveBtn" onclick="saveProject(this)">Salvar</button>
+        <div class="modal-danger-zone hidden" id="projectDangerZone">
+            <button class="btn-ghost-danger" onclick="confirmDeleteProject($('#projectModalId').value)">🗑 Excluir projeto</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: ITEM DO PROJETO ===================== -->
+<div class="modal-overlay" id="stepModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="stepModalTitle">Item</h3>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <input type="hidden" id="stepModalPid">
+        <input type="hidden" id="stepModalSid">
+        <p class="modal-context" id="stepModalProject"></p>
+        <div class="field-card">
+            <label class="field-label" for="stepTitleInput">Item</label>
+            <input type="text" id="stepTitleInput" class="input-hero" placeholder="O que precisa ser feito?" autocomplete="off">
+            <label class="field-label field-label-sub" for="stepObsInput">Descrição <span class="opt">opcional</span></label>
+            <textarea id="stepObsInput" class="input-desc" rows="3" placeholder="Medidas, materiais, contatos, links..."></textarea>
+        </div>
+        <label class="toggle-row" id="stepDoneRow">
+            <input type="checkbox" id="stepDoneInput">
+            <span class="toggle-track" aria-hidden="true"></span>
+            <span>Concluído</span>
+        </label>
+        <button class="btn-submit btn-hero" onclick="saveStepModal(this)">Salvar</button>
+        <div class="modal-danger-zone" id="stepDangerZone">
+            <button class="btn-ghost-danger" onclick="deleteStepFromModal(this)">🗑 Excluir item</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: TEXTO (nome de categoria etc.) ===================== -->
+<div class="modal-overlay" id="textModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="textModalTitle">Nome</h3>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="field-card">
+            <label class="field-label" for="textModalInput" id="textModalLabel">Nome</label>
+            <input type="text" id="textModalInput" class="input-hero" autocomplete="off" onkeydown="if(event.key==='Enter') $('#textModalSave').click()">
+        </div>
+        <button class="btn-submit btn-hero" id="textModalSave">Salvar</button>
     </div>
 </div>
 
@@ -354,6 +417,7 @@
         </div>
         <div class="menu-list">
             <button class="menu-item" onclick="openFromMenu('abono')"><span class="menu-icon">🌴</span><span class="menu-text"><strong>Marcar Abono</strong><small>Transforma um dia de trabalho em folga</small></span></button>
+            <button class="menu-item" onclick="openFromMenu('atestado')"><span class="menu-icon">🩺</span><span class="menu-text"><strong>Atestado Médico</strong><small>Período de afastamento (1 ou mais dias)</small></span></button>
             <button class="menu-item" onclick="openFromMenu('vacation')"><span class="menu-icon">✈️</span><span class="menu-text"><strong>Férias</strong><small>Período inteiro de folga</small></span></button>
             <button class="menu-item" onclick="openFromMenu('specials')"><span class="menu-icon">⭐</span><span class="menu-text"><strong>Dias Especiais</strong><small>Ver e excluir especiais</small></span></button>
             <button class="menu-item" onclick="openFromMenu('config')"><span class="menu-icon">📅</span><span class="menu-text"><strong>Configurar Escala</strong><small>Dia de trabalho e dias de folga</small></span></button>
@@ -370,20 +434,60 @@
             <h3>Férias</h3>
             <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
         </div>
-        <p class="confirm-message">Todos os dias do período viram folga e acendem em <strong style="color:#10b981">verde</strong> no calendário.</p>
+        <p class="confirm-message">Os dias de férias viram folga e acendem em <strong style="color:#10b981">verde</strong>. O dia de <strong>retorno ao trabalho</strong> fica destacado no calendário.</p>
         <div class="form-row">
             <div class="form-group" style="flex:1">
-                <label>Início</label>
-                <input type="text" id="vacationStart" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
+                <label for="vacationStart">1º dia de férias</label>
+                <input type="text" id="vacationStart" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this); syncVacationHint()">
             </div>
             <div class="form-group" style="flex:1">
-                <label>Fim</label>
-                <input type="text" id="vacationEnd" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this)">
+                <label for="vacationReturn">Retorno ao trabalho</label>
+                <input type="text" id="vacationReturn" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this); syncVacationHint()">
             </div>
         </div>
+        <p class="hint" id="vacationHint" style="margin:-6px 0 6px"></p>
         <button class="btn-submit" onclick="saveVacation(this)">Salvar Férias</button>
         <h4 class="section-title" style="margin-top:20px">Períodos cadastrados</h4>
         <div id="vacationList" class="item-list"></div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: ATESTADO MÉDICO ===================== -->
+<div class="modal-overlay" id="atestadoModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Atestado Médico</h3>
+            <button class="btn-close" onclick="closeTopModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="confirm-message">Os dias de trabalho dentro do período ficam com a tag <span class="shift-badge shift-broken">Trabalho</span> cinza e quebrada no calendário.</p>
+        <div class="field-card">
+            <div class="field-head">
+                <label class="field-label" for="atestadoStart">Início</label>
+                <input type="text" id="atestadoStart" class="date-hero" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this); syncAtestadoEnd()">
+            </div>
+            <span class="field-label">Quantos dias de atestado?</span>
+            <div class="chip-row" id="atestadoDaysRow">
+                <button type="button" class="chip" data-days="1" onclick="setAtestadoDays(1)">1 dia</button>
+                <button type="button" class="chip" data-days="2" onclick="setAtestadoDays(2)">2</button>
+                <button type="button" class="chip" data-days="3" onclick="setAtestadoDays(3)">3</button>
+                <button type="button" class="chip" data-days="4" onclick="setAtestadoDays(4)">4</button>
+                <button type="button" class="chip" data-days="5" onclick="setAtestadoDays(5)">5</button>
+                <button type="button" class="chip" data-days="7" onclick="setAtestadoDays(7)">7</button>
+                <button type="button" class="chip" data-days="15" onclick="setAtestadoDays(15)">15</button>
+            </div>
+            <div class="field-head" style="margin:12px 0 0">
+                <label class="field-label" for="atestadoEnd">Último dia</label>
+                <input type="text" id="atestadoEnd" class="date-hero" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" oninput="maskDateBR(this); syncAtestadoChips()">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="atestadoObs">Observação <span class="opt">opcional</span></label>
+            <input type="text" id="atestadoObs" class="form-control" placeholder="Ex: médico, clínica, CID">
+        </div>
+        <p class="hint" id="atestadoHint"></p>
+        <button class="btn-submit btn-hero" onclick="saveAtestado(this)">Salvar atestado</button>
+        <h4 class="section-title" style="margin-top:20px">Atestados cadastrados</h4>
+        <div id="atestadoList" class="item-list"></div>
     </div>
 </div>
 
