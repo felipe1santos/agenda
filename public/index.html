@@ -193,6 +193,7 @@
         <input type="hidden" id="taskModalId">
         <input type="hidden" id="taskModalPriority">
         <input type="hidden" id="taskTimeValue">
+        <p class="overdue-note hidden" id="taskOverdueNote">⚠ Tarefa vencida — conclua, escolha uma nova data ou exclua.</p>
 
         <div class="field-card">
             <label class="field-label" for="taskModalTitleInput">Nome da tarefa</label>
@@ -254,6 +255,9 @@
         </div>
 
         <button class="btn-submit btn-hero" onclick="saveTaskModal(this)">Salvar</button>
+        <div class="modal-danger-zone hidden" id="taskDangerZone">
+            <button class="btn-ghost-danger" onclick="confirmDeleteTask($('#taskModalId').value)">🗑 Excluir tarefa</button>
+        </div>
     </div>
 </div>
 

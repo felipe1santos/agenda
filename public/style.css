@@ -112,9 +112,7 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 
 .event-list { display: flex; flex-direction: column; gap: 6px; }
 .event-item { background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.event-item.pending { background: #f1f5f9; border-color: #e2e8f0; }
-.event-item.done { background: #dcfce7; border-color: #86efac; color: #14532d; }
-.event-item.done .event-title { text-decoration: line-through; text-decoration-color: rgba(20,83,45,0.45); }
+.event-item.done .event-title { text-decoration: line-through; opacity: 0.55; }
 .event-details { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .event-title { font-weight: 600; }
 .event-time { color: var(--primary); font-weight: bold; }
@@ -178,7 +176,7 @@ header { flex-shrink: 0; background: var(--card-bg); padding: 12px 16px; display
 .day-tag-especial { background-color: var(--cor-especial); }
 .day-tag-recurring-pending { background-color: var(--cor-especial); animation: blink-red 1s ease-in-out infinite; }
 .day-tag-recurring-done { background-color: var(--cor-folga); }
-.day-tag-task { background-color: #e2e8f0; color: #334155; }
+.day-tag-task { background-color: var(--primary); }
 .day-tag-folga { background-color: var(--cor-folga); }
 .day-tag-more { background-color: var(--text-muted); text-align: center; }
 
@@ -528,3 +526,30 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .shop-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; padding: 12px 0; cursor: pointer; overflow-wrap: anywhere; }
 .shop-row.done { background: #f0fdf4; }
 .shop-row.done .shop-name { color: #15803d; text-decoration: line-through; text-decoration-color: #86efac; }
+
+
+/* ===================== Ajustes v2 ===================== */
+/* Grade: tarefa vencida (passou e não concluiu) em cinza claro */
+.day-tag.day-tag-task-overdue { background: #e2e8f0; color: #64748b; }
+/* Trabalho em dia que já passou: azul bem claro, discreto */
+.day-tag.day-tag-past { background: #bae6fd; color: #0369a1; }
+.shift-badge.shift-past { background: #bae6fd; color: #0369a1; }
+
+/* Aba Tarefas: lista compacta, uma linha por tarefa */
+.task-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; }
+.task-row { display: flex; align-items: center; min-height: 48px; }
+.task-row + .task-row { border-top: 1px solid #f1f5f9; }
+.task-row-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 8px 0 0; background: none; border: none; cursor: pointer; text-align: left; color: var(--text-main); font: inherit; touch-action: manipulation; }
+.task-row-body:active { background: var(--bg-color); }
+.task-row-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-row-hints { font-size: 12px; opacity: 0.7; flex-shrink: 0; letter-spacing: 1px; }
+.task-row-date { flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.task-row-date.overdue { color: #dc2626; background: #fef2f2; padding: 3px 8px; border-radius: 999px; }
+.task-row .step-edit { color: #cbd5e1; display: flex; flex-shrink: 0; }
+.prio-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.prio-dot-1 { background: var(--prio-1); }
+.prio-dot-2 { background: var(--prio-2); }
+.prio-dot-3 { background: var(--prio-3); }
+.prio-dot-4 { background: var(--prio-4); }
+.prio-dot-5 { background: var(--prio-5); box-shadow: 0 0 0 3px #fecaca; }
+.overdue-note { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }

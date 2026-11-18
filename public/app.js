@@ -464,7 +464,8 @@ function sortDayTasks(list) {
 
 function getDayTags(dateStr, shift) {
   const tags = [];
-  if (shift.type === 'trabalho') tags.push({ label: 'Trabalho', cls: 'day-tag-dia' });
+  // Trabalho de dia que já passou fica num azul bem claro, sem roubar atenção
+  if (shift.type === 'trabalho') tags.push({ label: 'Trabalho', cls: 'day-tag-dia' + (dateStr < todayISO() ? ' day-tag-past' : '') });
   if (shift.type === 'atestado') tags.push({ label: 'Trabalho', cls: 'day-tag-broken' });
   if (shift.atestado) tags.push({ label: '🩺 Atestado', cls: 'day-tag-atestado' });
   if (vacationReturnFor(dateStr)) tags.push({ label: '🔙 Retorno', cls: 'day-tag-return' });
@@ -482,11 +483,13 @@ function getDayTags(dateStr, shift) {
     tags.push({ label: '🔁 ' + r.title, cls: pending ? 'day-tag-recurring-pending' : 'day-tag-recurring-done' });
   });
 
-  // Concluídas continuam no dia (verde claro); pendentes em cinza claro
-  // (ou na cor da prioridade, quando tiver)
+  // Grade: concluída = verde claro; vencida (passou e não concluiu) = cinza claro;
+  // as demais mantêm a cor normal (azul ou cor da prioridade)
   sortDayTasks(state.tasks.filter((t) => taskOccursOn(t, dateStr))).forEach((t) => {
     if (t.done) {
       tags.push({ label: '✓ ' + (t.time ? t.time + ' ' : '') + t.title, cls: 'day-tag-task day-tag-task-done' });
+    } else if (isOverdue(t)) {
+      tags.push({ label: (t.time ? t.time + ' ' : '') + t.title, cls: 'day-tag-task day-tag-task-overdue' });
     } else {
       tags.push({
         label: (t.time ? t.time + ' ' : '') + t.title,
@@ -539,7 +542,7 @@ function createDayCard(year, month, day, isNextMonth) {
         <span class="day-name">${dayNames[dateObj.getDay()]}</span>
         ${isToday ? '<span class="today-pill">HOJE</span>' : ''}
       </div>
-      ${shouldShowShiftBadge(dateStr, shift) ? `<span class="shift-badge ${shift.class}">${shift.label}</span>` : ''}
+      ${shouldShowShiftBadge(dateStr, shift) ? `<span class="shift-badge ${shift.class}${shift.type === 'trabalho' && dateStr < todayISO() ? ' shift-past' : ''}">${shift.label}</span>` : ''}
     </div>
   `;
   html += renderDayBody(dateStr, shift);
@@ -601,7 +604,7 @@ function renderDayBody(dateStr, shift) {
            <button onclick="event.stopPropagation(); openTaskModal('${t.id}')">✏️</button>
            <button title="Nova data" onclick="event.stopPropagation(); openRescheduleModal('${t.id}')">📅</button>`;
       html += `
-        <div class="event-item ${t.done ? 'done' : 'pending'}${t.done ? '' : prioClass(t.priority)}">
+        <div class="event-item ${t.done ? 'done' : ''}${t.done ? '' : prioClass(t.priority)}">
           ${t.done ? '' : prioIcon(t.priority)}
           <div class="event-details">
             <span class="event-title">${t.time ? `<span class="event-time">${t.time}</span> ` : ''}${escapeHtml(t.title)}</span>
@@ -913,7 +916,7 @@ function renderTasks() {
     .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '99:99').localeCompare(b.time || '99:99'));
   const backlog = state.tasks.filter((t) => !t.date && !t.done);
 
-  renderTaskList('tasksOverdue', overdue, 'upcoming');
+  renderTaskList('tasksOverdue', overdue, 'overdue');
   $('#overdueSection').classList.toggle('hidden', !overdue.length);
   const el = $('#tasksBacklog');
   if (!backlog.length) {
@@ -931,50 +934,28 @@ function isOverdue(t) {
 function renderTaskList(containerId, items, context) {
   const el = $('#' + containerId);
   if (!items.length) { el.innerHTML = '<div class="empty-state">Nada por aqui.</div>'; return; }
-  el.innerHTML = items.map((t) => taskListItemHtml(t, context)).join('');
+  el.innerHTML = `<div class="task-card">${items.map((t) => taskRowHtml(t, context)).join('')}</div>`;
 }
 
-function taskListItemHtml(t, context) {
-  const metaParts = [];
-  if (isOverdue(t)) metaParts.push('<span class="overdue-tag">⚠ Vencida</span>');
-  if (t.date) metaParts.push(formatDateBR(t.date) + (t.endDate && t.endDate !== t.date ? ' até ' + formatDateBR(t.endDate) : ''));
-  if (t.time) metaParts.push('⏰ ' + t.time);
-  if (t.priority) metaParts.push(PRIORITY_LABELS[t.priority]);
-  if (t.obs) metaParts.push(escapeHtml(t.obs));
-  const extras = taskExtrasHtml(t);
-
-  let actions;
-  if (context === 'upcoming') {
-    actions = `
-      <button class="icon-btn" title="Editar" onclick="openTaskModal('${t.id}')">✏️</button>
-      <button class="icon-btn" title="Nova data" onclick="openRescheduleModal('${t.id}')">📅</button>`;
-  } else if (context === 'backlog') {
-    actions = `
-      <button class="icon-btn" title="Editar" onclick="openTaskModal('${t.id}')">✏️</button>
-      <button class="icon-btn" title="Definir data" onclick="openRescheduleModal('${t.id}')">📅</button>
-      <button class="icon-btn" title="Excluir" onclick="confirmDeleteTask('${t.id}')">🗑</button>`;
-  } else {
-    actions = `
-      <button class="icon-btn" title="Reabrir" onclick="reopenTask('${t.id}')">↩</button>
-      <button class="icon-btn" title="Excluir" onclick="confirmDeleteTask('${t.id}')">🗑</button>`;
-  }
-
-  const meta = metaParts.length
-    ? `<div class="item-meta">${metaParts.map((m) => `<span>${m}</span>`).join(' · ')}</div>`
-    : '';
-
+// Linha única: check · título (cortado com …) · data/hora · seta.
+// Tocar na linha abre o modal com todas as informações da tarefa.
+function taskRowHtml(t, context) {
+  const when = context === 'overdue'
+    ? `<span class="task-row-date overdue">${formatDateBR(t.date)}${t.time ? ' · ' + t.time : ''}</span>`
+    : (t.time ? `<span class="task-row-date">${t.time}</span>` : '');
+  const dot = t.priority ? `<span class="prio-dot prio-dot-${t.priority}" title="Prioridade ${PRIORITY_LABELS[t.priority]}"></span>` : '';
+  const hints = [t.obs ? '📝' : '', t.address ? '📍' : '', t.phone ? '💬' : '', t.hasPhoto ? '📷' : ''].join('');
   return `
-    <div class="list-item ${t.done ? 'done' : ''}${t.done ? '' : prioClass(t.priority)}">
-      <button class="check-circle" onclick="${t.done ? `reopenTask('${t.id}')` : `completeTask('${t.id}')`}">${t.done ? '✓' : ''}</button>
-      ${t.done ? '' : prioIcon(t.priority)}
-      <div class="item-content">
-        <div class="item-title">${escapeHtml(t.title)}</div>
-        ${meta}
-        ${extras ? `<div class="item-meta">${extras}</div>` : ''}
-      </div>
-      <div class="item-actions">${actions}</div>
-    </div>
-  `;
+    <div class="task-row">
+      <button class="step-check" role="checkbox" aria-checked="false" aria-label="Concluir: ${escapeHtml(t.title)}" onclick="completeTask('${t.id}')"></button>
+      <button class="task-row-body" onclick="openTaskModal('${t.id}')" aria-label="Abrir tarefa ${escapeHtml(t.title)}">
+        ${dot}
+        <span class="task-row-title">${escapeHtml(t.title)}</span>
+        ${hints ? `<span class="task-row-hints" aria-hidden="true">${hints}</span>` : ''}
+        ${when}
+        <span class="step-edit" aria-hidden="true">${ICON_CHEVRON}</span>
+      </button>
+    </div>`;
 }
 
 // ---- Relógio analógico para o horário ---- //
@@ -1320,6 +1301,8 @@ function openTaskModal(id, defaultDate) {
   const task = id ? state.tasks.find((t) => t.id === id) : null;
   taskDraftId = task ? null : genId();
   $('#taskModalTitle').textContent = task ? 'Editar Tarefa' : 'Nova Tarefa';
+  $('#taskDangerZone').classList.toggle('hidden', !task);
+  $('#taskOverdueNote').classList.toggle('hidden', !(task && isOverdue(task)));
   $('#taskModalId').value = task ? task.id : '';
   $('#taskModalTitleInput').value = task ? task.title : '';
   // defaultDate '' = sem data (aba Tarefas); undefined = hoje
@@ -1345,7 +1328,8 @@ function openTaskModal(id, defaultDate) {
   toggleTaskAdvanced(!!(task && (task.endDate || task.hasPhoto)));
 
   openModal('taskModal');
-  setTimeout(() => $('#taskModalTitleInput').focus(), 120);
+  // Só foca em tarefa nova: na edição o título longo apareceria cortado no fim
+  if (!task) setTimeout(() => $('#taskModalTitleInput').focus(), 120);
 }
 
 function saveTaskModal(btn) {
@@ -1466,6 +1450,8 @@ function confirmDeleteTask(id) {
     forgetTaskPhoto(id);
     state.tasks = state.tasks.filter((t) => t.id !== id);
     closeModal('confirmModal');
+    if ($('#taskModalId').value === id) closeModal('taskModal');
+    refreshDaySheet();
     renderAll();
   });
 }
